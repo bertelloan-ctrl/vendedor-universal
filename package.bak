@@ -1,0 +1,45 @@
+{
+  "name": "vendedor-universal",
+  "version": "2.0.0",
+  "description": "Sistema universal de agentes de venta con IA para múltiples empresas",
+  "type": "commonjs"
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "miner": "node index.js",
+    "dialer": "node auto-dialer.js",
+    "test-call": "python test_call.py",
+    "voices": "node -e \"import('./services/elevenlabs.js').then(m => m.getAvailableVoices().then(v => console.log(JSON.stringify(v, null, 2))))\"",
+    "stats": "node -e \"import('./utils/logger.js').then(m => m.getDailyStats().then(s => console.log(JSON.stringify(s, null, 2))))\""
+  },
+  "dependencies": {
+    "axios": "^1.12.2",
+    "cheerio": "^1.1.2",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "express-ws": "^5.0.2",
+    "node-fetch": "^3.3.2",
+    "openai": "^6.6.0",
+    "twilio": "^5.0.0",
+    "winston": "^3.18.3",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "ai",
+    "sales",
+    "voice",
+    "twilio",
+    "openai",
+    "elevenlabs",
+    "crm"
+  ],
+  "author": "Tu Empresa",
+  "license": "MIT"
+}
