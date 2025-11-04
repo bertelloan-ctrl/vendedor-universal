@@ -1,0 +1,25 @@
+{
+  "client_id": "allopack_001",
+  "company_name": "Allopack",
+  "industry": "Empaque industrial y cartón corrugado",
+  "products": [
+    "Cajas de cartón corrugado personalizadas",
+    "Embalaje para ecommerce y retail",
+    "Soluciones de empaque completo"
+  ],
+  "value_proposition": "Entrega garantizada en 24 horas en CDMX y Estado de México con calidad certificada ISO 9001",
+  "sales_goal": "agendar_demo",
+  "conditions": {
+    "pricing": "Desde $5 MXN por caja (precio de volumen)",
+    "min_order": "100 cajas",
+    "coverage": "CDMX, Estado de México y zona metropolitana",
+    "delivery_time": "24-48 horas",
+    "payment_methods": "Transferencia, efectivo, crédito para clientes frecuentes"
+  },
+  "contact": {
+    "email": "ventas@allopack.com",
+    "whatsapp": "+525512345678"
+  },
+  "tone": "profesional_amigable",
+  "additional_instructions": "Si preguntan por certificaciones, mencionar ISO 9001. Para pedidos mayores a 1000 cajas, mencionar descuentos por volumen. Si es temporada alta (noviembre-diciembre), advertir que los tiempos pueden extenderse a 48-72 horas."
+}
