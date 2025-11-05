@@ -11,6 +11,7 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const PORT = process.env.PORT || 3000;
 
 const clientConfigs = new Map();
+const callClientMap = new Map(); // Mapa para asociar CallSid -> clientId
 
 function getClientConfig(clientId) {
   if (!clientConfigs.has(clientId)) {
@@ -38,11 +39,14 @@ app.post('/incoming-call', (req, res) => {
   const { From, CallSid } = req.body;
   const clientId = req.query.client || 'default';
   
-  console.log(`📞 Llamada de ${From} | Cliente: ${clientId}`);
+  // Guardar el mapeo CallSid -> clientId
+  callClientMap.set(CallSid, clientId);
+  
+  console.log(`📞 Llamada de ${From} | CallSid: ${CallSid} | Cliente: ${clientId}`);
   
   const twiml = new VoiceResponse();
   twiml.connect().stream({
-    url: `wss://${req.headers.host}/media-stream?client=${clientId}&callSid=${CallSid}`
+    url: `wss://${req.headers.host}/media-stream`
   });
   
   res.type('text/xml').send(twiml.toString());
@@ -50,72 +54,96 @@ app.post('/incoming-call', (req, res) => {
 
 // WebSocket para streaming de audio
 app.ws('/media-stream', (ws, req) => {
-  const clientId = req.query.client || 'default';
-  const config = getClientConfig(clientId);
-  
-  console.log(`🎙️ WebSocket conectado | Cliente: ${clientId} | Empresa: ${config.company_name}`);
-  
-  let openAiWs, streamSid;
-  
-  openAiWs = new WebSocket(
-    'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17',
-    { 
-      headers: { 
-        'Authorization': `Bearer ${OPENAI_API_KEY}`, 
-        'OpenAI-Beta': 'realtime=v1' 
-      }
-    }
-  );
-  
-  openAiWs.on('open', () => {
-    console.log('✅ OpenAI WebSocket conectado');
-    openAiWs.send(JSON.stringify({
-      type: 'session.update',
-      session: {
-        turn_detection: { type: 'server_vad' },
-        input_audio_format: 'g711_ulaw',
-        output_audio_format: 'g711_ulaw',
-        voice: 'alloy',
-        instructions: buildPrompt(config)
-      }
-    }));
-  });
-  
-  openAiWs.on('message', (data) => {
-    const r = JSON.parse(data);
-    if (r.type === 'response.audio.delta' && r.delta) {
-      ws.send(JSON.stringify({ 
-        event: 'media', 
-        streamSid, 
-        media: { payload: r.delta }
-      }));
-    }
-  });
-  
-  openAiWs.on('error', (error) => {
-    console.error('❌ Error OpenAI WebSocket:', error);
-  });
+  let clientId = 'default';
+  let config = getClientConfig(clientId);
+  let openAiWs, streamSid, callSid;
   
   ws.on('message', (msg) => {
-    const m = JSON.parse(msg);
-    if (m.event === 'start') {
-      streamSid = m.start.streamSid;
-      console.log(`🎙️ Stream iniciado: ${streamSid}`);
-    }
-    else if (m.event === 'media' && openAiWs.readyState === 1) {
-      openAiWs.send(JSON.stringify({ 
-        type: 'input_audio_buffer.append', 
-        audio: m.media.payload 
-      }));
-    }
-    else if (m.event === 'stop') {
-      console.log('🛑 Stream detenido');
-      openAiWs.close();
+    try {
+      const m = JSON.parse(msg);
+      
+      if (m.event === 'start') {
+        streamSid = m.start.streamSid;
+        callSid = m.start.callSid;
+        
+        // Obtener el clientId desde el mapa usando el CallSid
+        if (callClientMap.has(callSid)) {
+          clientId = callClientMap.get(callSid);
+          config = getClientConfig(clientId);
+          console.log(`🎙️ WebSocket conectado | CallSid: ${callSid} | Cliente: ${clientId} | Empresa: ${config.company_name}`);
+        } else {
+          console.log(`⚠️ CallSid ${callSid} no encontrado en el mapa, usando default`);
+        }
+        
+        // Inicializar OpenAI con la configuración correcta
+        openAiWs = new WebSocket(
+          'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17',
+          { 
+            headers: { 
+              'Authorization': `Bearer ${OPENAI_API_KEY}`, 
+              'OpenAI-Beta': 'realtime=v1' 
+            }
+          }
+        );
+        
+        openAiWs.on('open', () => {
+          console.log(`✅ OpenAI WebSocket conectado para ${config.company_name}`);
+          openAiWs.send(JSON.stringify({
+            type: 'session.update',
+            session: {
+              turn_detection: { type: 'server_vad' },
+              input_audio_format: 'g711_ulaw',
+              output_audio_format: 'g711_ulaw',
+              voice: 'alloy',
+              instructions: buildPrompt(config)
+            }
+          }));
+        });
+        
+        openAiWs.on('message', (data) => {
+          const r = JSON.parse(data);
+          if (r.type === 'response.audio.delta' && r.delta) {
+            ws.send(JSON.stringify({ 
+              event: 'media', 
+              streamSid, 
+              media: { payload: r.delta }
+            }));
+          }
+        });
+        
+        openAiWs.on('error', (error) => {
+          console.error('❌ Error OpenAI WebSocket:', error);
+        });
+      }
+      else if (m.event === 'media' && openAiWs && openAiWs.readyState === 1) {
+        openAiWs.send(JSON.stringify({ 
+          type: 'input_audio_buffer.append', 
+          audio: m.media.payload 
+        }));
+      }
+      else if (m.event === 'stop') {
+        console.log('🛑 Stream detenido');
+        
+        // Limpiar el mapa
+        if (callSid) {
+          callClientMap.delete(callSid);
+        }
+        
+        if (openAiWs) openAiWs.close();
+      }
+    } catch (error) {
+      console.error('❌ Error procesando mensaje WebSocket:', error);
     }
   });
   
   ws.on('close', () => {
     console.log('🔌 WebSocket cliente cerrado');
+    
+    // Limpiar el mapa
+    if (callSid) {
+      callClientMap.delete(callSid);
+    }
+    
     if (openAiWs) openAiWs.close();
   });
 });
