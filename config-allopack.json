@@ -5,21 +5,26 @@
   "products": [
     "Cajas de cartón corrugado personalizadas",
     "Embalaje para ecommerce y retail",
-    "Soluciones de empaque completo"
+    "Soluciones de empaque completo",
+    "Cartón corrugado de pared sencilla y doble",
+    "Cajas troqueladas con diseños personalizados",
+    "Separadores y esquineros de cartón"
   ],
-  "value_proposition": "Entrega garantizada en 24 horas en CDMX y Estado de México con calidad certificada ISO 9001",
+  "value_proposition": "Entrega garantizada en 24-48 horas en CDMX y Estado de México con calidad certificada ISO 9001. Precios 8-15% más competitivos que la competencia",
   "sales_goal": "agendar_demo",
   "conditions": {
-    "pricing": "Desde $5 MXN por caja (precio de volumen)",
-    "min_order": "100 cajas",
-    "coverage": "CDMX, Estado de México y zona metropolitana",
-    "delivery_time": "24-48 horas",
-    "payment_methods": "Transferencia, efectivo, crédito para clientes frecuentes"
+    "pricing": "Desde $5 MXN por caja (precio de volumen, más competitivo en pedidos grandes)",
+    "min_order": "100 cajas (pero somos flexibles)",
+    "coverage": "CDMX, Estado de México y zona metropolitana con entrega propia",
+    "delivery_time": "24-48 horas para pedidos regulares, 3-5 días para diseños nuevos",
+    "payment_methods": "Transferencia, efectivo, tarjeta, crédito para clientes frecuentes (30 días)",
+    "certifications": "ISO 9001:2015, material 100% reciclable"
   },
   "contact": {
     "email": "ventas@allopack.com",
-    "whatsapp": "+525512345678"
+    "whatsapp": "+525512345678",
+    "phone": "55-1234-5678"
   },
   "tone": "profesional_amigable",
-  "additional_instructions": "Si preguntan por certificaciones, mencionar ISO 9001. Para pedidos mayores a 1000 cajas, mencionar descuentos por volumen. Si es temporada alta (noviembre-diciembre), advertir que los tiempos pueden extenderse a 48-72 horas."
+  "additional_instructions": "Conocimiento específico: El cartón corrugado se mide por calibre (125, 150, 200, etc). Las cajas se cotizan por millar. Las cajas troqueladas llevan diseño pero son más caras. Menciona que trabajamos con Amazon, Mercado Libre y retailers. Si preguntan por certificaciones, menciona ISO 9001. Para pedidos mayores a 1000 cajas, hay descuentos por volumen. En temporada alta (noviembre-diciembre para ecommerce), los tiempos pueden ser de 3-5 días. Siempre preguntar: ¿qué tipo de producto empacan? ¿qué medidas necesitan? ¿cuántas cajas al mes compran? Esto ayuda a dar mejor precio."
 }
