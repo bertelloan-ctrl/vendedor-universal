@@ -11,7 +11,7 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const PORT = process.env.PORT || 3000;
 
 const clientConfigs = new Map();
-const callClientMap = new Map(); // Mapa para asociar CallSid -> clientId
+const callClientMap = new Map();
 
 function getClientConfig(clientId) {
   if (!clientConfigs.has(clientId)) {
@@ -60,18 +60,14 @@ REGLAS IMPORTANTES:
 - Suena NATURAL: "este...", "o sea", "pues mira"`;
 }
 
-
-// Endpoint de health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', clients: clientConfigs.size });
 });
 
-// Endpoint para recibir llamadas de Twilio
 app.post('/incoming-call', (req, res) => {
   const { From, CallSid } = req.body;
   const clientId = req.query.client || 'default';
   
-  // Guardar el mapeo CallSid -> clientId
   callClientMap.set(CallSid, clientId);
   
   console.log(`📞 Llamada de ${From} | CallSid: ${CallSid} | Cliente: ${clientId}`);
@@ -84,7 +80,6 @@ app.post('/incoming-call', (req, res) => {
   res.type('text/xml').send(twiml.toString());
 });
 
-// WebSocket para streaming de audio
 app.ws('/media-stream', (ws, req) => {
   let clientId = 'default';
   let config = getClientConfig(clientId);
@@ -98,16 +93,12 @@ app.ws('/media-stream', (ws, req) => {
         streamSid = m.start.streamSid;
         callSid = m.start.callSid;
         
-        // Obtener el clientId desde el mapa usando el CallSid
         if (callClientMap.has(callSid)) {
           clientId = callClientMap.get(callSid);
           config = getClientConfig(clientId);
           console.log(`🎙️ WebSocket conectado | CallSid: ${callSid} | Cliente: ${clientId} | Empresa: ${config.company_name}`);
-        } else {
-          console.log(`⚠️ CallSid ${callSid} no encontrado en el mapa, usando default`);
         }
         
-        // Inicializar OpenAI con la configuración correcta
         openAiWs = new WebSocket(
           'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17',
           { 
@@ -131,7 +122,7 @@ app.ws('/media-stream', (ws, req) => {
               },
               input_audio_format: 'g711_ulaw',
               output_audio_format: 'g711_ulaw',
-              voice: 'shimmer', // Voz más natural y femenina
+              voice: 'shimmer',
               instructions: buildPrompt(config),
               temperature: 0.8,
               max_response_output_tokens: 150
@@ -162,12 +153,7 @@ app.ws('/media-stream', (ws, req) => {
       }
       else if (m.event === 'stop') {
         console.log('🛑 Stream detenido');
-        
-        // Limpiar el mapa
-        if (callSid) {
-          callClientMap.delete(callSid);
-        }
-        
+        if (callSid) callClientMap.delete(callSid);
         if (openAiWs) openAiWs.close();
       }
     } catch (error) {
@@ -177,17 +163,11 @@ app.ws('/media-stream', (ws, req) => {
   
   ws.on('close', () => {
     console.log('🔌 WebSocket cliente cerrado');
-    
-    // Limpiar el mapa
-    if (callSid) {
-      callClientMap.delete(callSid);
-    }
-    
+    if (callSid) callClientMap.delete(callSid);
     if (openAiWs) openAiWs.close();
   });
 });
 
-// API: Guardar configuración de cliente
 app.post('/api/clients/:clientId/config', (req, res) => {
   const config = req.body;
   config.client_id = req.params.clientId;
@@ -196,7 +176,6 @@ app.post('/api/clients/:clientId/config', (req, res) => {
   res.json({ success: true, clientId: req.params.clientId });
 });
 
-// API: Obtener configuración de cliente
 app.get('/api/clients/:clientId/config', (req, res) => {
   const config = getClientConfig(req.params.clientId);
   res.json(config);
