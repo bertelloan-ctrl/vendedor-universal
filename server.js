@@ -38,7 +38,7 @@ app.post('/incoming-call', (req, res) => {
   const { From, CallSid } = req.body;
   const clientId = req.query.client || 'default';
   
-  console.log(`📞 Llamada de ${From}`);
+  console.log(`📞 Llamada de ${From} | Cliente: ${clientId}`);
   
   const twiml = new VoiceResponse();
   twiml.connect().stream({
@@ -50,7 +50,11 @@ app.post('/incoming-call', (req, res) => {
 
 // WebSocket para streaming de audio
 app.ws('/media-stream', (ws, req) => {
-  const config = getClientConfig(req.query.client || 'default');
+  const clientId = req.query.client || 'default';
+  const config = getClientConfig(clientId);
+  
+  console.log(`🎙️ WebSocket conectado | Cliente: ${clientId} | Empresa: ${config.company_name}`);
+  
   let openAiWs, streamSid;
   
   openAiWs = new WebSocket(
