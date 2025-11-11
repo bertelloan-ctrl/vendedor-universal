@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000;
 
 const clientConfigs = new Map();
 const callClientMap = new Map();
-const callTranscripts = new Map(); // Almacenar transcripciones // Mapa para asociar CallSid -> clientId
+const callTranscripts = new Map();
 
 function getClientConfig(clientId) {
   if (!clientConfigs.has(clientId)) {
@@ -166,18 +166,14 @@ OBJETIVOS SECUNDARIOS: Agendar demo o cotizar si hay oportunidad clara
 ${config.additional_instructions ? '\n═══ INSTRUCCIONES ADICIONALES ═══\n' + config.additional_instructions : ''}`;
 }
 
-
-// Endpoint de health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', clients: clientConfigs.size });
 });
 
-// Endpoint para recibir llamadas de Twilio
 app.post('/incoming-call', (req, res) => {
   const { From, CallSid } = req.body;
   const clientId = req.query.client || 'default';
   
-  // Guardar el mapeo CallSid -> clientId
   callClientMap.set(CallSid, clientId);
   
   console.log(`📞 Llamada de ${From} | CallSid: ${CallSid} | Cliente: ${clientId}`);
@@ -190,7 +186,6 @@ app.post('/incoming-call', (req, res) => {
   res.type('text/xml').send(twiml.toString());
 });
 
-// WebSocket para streaming de audio
 app.ws('/media-stream', (ws, req) => {
   let clientId = 'default';
   let config = getClientConfig(clientId);
@@ -205,10 +200,8 @@ app.ws('/media-stream', (ws, req) => {
         streamSid = m.start.streamSid;
         callSid = m.start.callSid;
         
-        // Inicializar transcripción
         callTranscripts.set(callSid, transcript);
         
-        // Obtener el clientId desde el mapa usando el CallSid
         if (callClientMap.has(callSid)) {
           clientId = callClientMap.get(callSid);
           config = getClientConfig(clientId);
@@ -217,7 +210,6 @@ app.ws('/media-stream', (ws, req) => {
           console.log(`⚠️ CallSid ${callSid} no encontrado en el mapa, usando default`);
         }
         
-        // Inicializar OpenAI con la configuración correcta
         openAiWs = new WebSocket(
           'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17',
           { 
@@ -256,7 +248,6 @@ app.ws('/media-stream', (ws, req) => {
         openAiWs.on('message', (data) => {
           const r = JSON.parse(data);
           
-          // Audio delta - PRIORIDAD
           if (r.type === 'response.audio.delta' && r.delta) {
             console.log(`🔊 Enviando audio delta (${r.delta.length} chars)`);
             ws.send(JSON.stringify({ 
@@ -266,18 +257,15 @@ app.ws('/media-stream', (ws, req) => {
             }));
           }
           
-          // Transcripción del cliente (opcional, para logs)
           if (r.type === 'conversation.item.input_audio_transcription.completed') {
             transcript.client.push(r.transcript);
             console.log(`👤 Cliente: ${r.transcript}`);
           }
           
-          // Transcripción del agente (opcional, para logs)
           if (r.type === 'response.audio_transcript.delta' && r.delta) {
             console.log(`🤖 Agente (audio): ${r.delta}`);
           }
           
-          // Respuesta completa del agente (texto)
           if (r.type === 'response.done' && r.response.output) {
             r.response.output.forEach(item => {
               if (item.type === 'message' && item.content) {
@@ -286,7 +274,6 @@ app.ws('/media-stream', (ws, req) => {
                     transcript.agent.push(content.text);
                     console.log(`🤖 Agente (texto): ${content.text}`);
                     
-                    // Extraer datos capturados
                     const emailMatch = content.text.match(/\[EMAIL:([^\]]+)\]/);
                     const phoneMatch = content.text.match(/\[PHONE:([^\]]+)\]/);
                     const nameMatch = content.text.match(/\[NAME:([^\]]+)\]/);
@@ -316,17 +303,14 @@ app.ws('/media-stream', (ws, req) => {
       else if (m.event === 'stop') {
         console.log('🛑 Stream detenido');
         
-        // Guardar transcripción final
         if (callSid && callTranscripts.has(callSid)) {
           const finalTranscript = callTranscripts.get(callSid);
           console.log('\n📋 TRANSCRIPCIÓN COMPLETA:');
           console.log(JSON.stringify(finalTranscript, null, 2));
         }
         
-        // Limpiar
         if (callSid) {
           callClientMap.delete(callSid);
-          // Mantener transcripción por 1 hora
           setTimeout(() => callTranscripts.delete(callSid), 3600000);
         }
         
@@ -340,7 +324,6 @@ app.ws('/media-stream', (ws, req) => {
   ws.on('close', () => {
     console.log('🔌 WebSocket cliente cerrado');
     
-    // Guardar transcripción final
     if (callSid && callTranscripts.has(callSid)) {
       const finalTranscript = callTranscripts.get(callSid);
       console.log('\n📋 TRANSCRIPCIÓN COMPLETA (on close):');
@@ -355,7 +338,6 @@ app.ws('/media-stream', (ws, req) => {
   });
 });
 
-// API: Guardar configuración de cliente
 app.post('/api/clients/:clientId/config', (req, res) => {
   const config = req.body;
   config.client_id = req.params.clientId;
@@ -364,13 +346,11 @@ app.post('/api/clients/:clientId/config', (req, res) => {
   res.json({ success: true, clientId: req.params.clientId });
 });
 
-// API: Obtener configuración de cliente
 app.get('/api/clients/:clientId/config', (req, res) => {
   const config = getClientConfig(req.params.clientId);
   res.json(config);
 });
 
-// API: Obtener transcripción de llamada
 app.get('/api/transcripts/:callSid', (req, res) => {
   const transcript = callTranscripts.get(req.params.callSid);
   if (transcript) {
@@ -380,7 +360,6 @@ app.get('/api/transcripts/:callSid', (req, res) => {
   }
 });
 
-// API: Obtener todas las transcripciones
 app.get('/api/transcripts', (req, res) => {
   const allTranscripts = Array.from(callTranscripts.entries()).map(([callSid, data]) => ({
     callSid,
