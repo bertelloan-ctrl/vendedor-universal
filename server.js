@@ -179,7 +179,8 @@ app.post('/incoming-call', (req, res) => {
   console.log(`📞 Llamada de ${From} | CallSid: ${CallSid} | Cliente: ${clientId}`);
   
   const twiml = new VoiceResponse();
-  twiml.connect().stream({
+  const connect = twiml.connect();
+  connect.stream({
     url: `wss://${req.headers.host}/media-stream`
   });
   
@@ -199,6 +200,8 @@ app.ws('/media-stream', (ws, req) => {
       if (m.event === 'start') {
         streamSid = m.start.streamSid;
         callSid = m.start.callSid;
+        
+        console.log(`🔵 Stream started | StreamSid: ${streamSid}`);
         
         callTranscripts.set(callSid, transcript);
         
@@ -249,12 +252,18 @@ app.ws('/media-stream', (ws, req) => {
           const r = JSON.parse(data);
           
           if (r.type === 'response.audio.delta' && r.delta) {
-            console.log(`🔊 Enviando audio delta (${r.delta.length} chars)`);
-            ws.send(JSON.stringify({ 
-              event: 'media', 
-              streamSid, 
-              media: { payload: r.delta }
-            }));
+            console.log(`🔊 Audio delta | Length: ${r.delta.length} | Sample: ${r.delta.substring(0, 30)}...`);
+            
+            const twilioPayload = {
+              event: 'media',
+              streamSid: streamSid,
+              media: {
+                payload: r.delta
+              }
+            };
+            
+            ws.send(JSON.stringify(twilioPayload));
+            console.log(`📤 Sent to Twilio | StreamSid: ${streamSid} verified`);
           }
           
           if (r.type === 'conversation.item.input_audio_transcription.completed') {
