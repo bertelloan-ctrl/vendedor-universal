@@ -233,6 +233,7 @@ app.ws('/media-stream', (ws, req) => {
           openAiWs.send(JSON.stringify({
             type: 'session.update',
             session: {
+              modalities: ['text', 'audio'],
               turn_detection: { 
                 type: 'server_vad',
                 threshold: 0.75,
@@ -257,6 +258,7 @@ app.ws('/media-stream', (ws, req) => {
           
           // Audio delta - PRIORIDAD
           if (r.type === 'response.audio.delta' && r.delta) {
+            console.log(`🔊 Enviando audio delta (${r.delta.length} chars)`);
             ws.send(JSON.stringify({ 
               event: 'media', 
               streamSid, 
