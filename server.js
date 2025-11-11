@@ -166,8 +166,39 @@ OBJETIVOS SECUNDARIOS: Agendar demo o cotizar si hay oportunidad clara
 ${config.additional_instructions ? '\n═══ INSTRUCCIONES ADICIONALES ═══\n' + config.additional_instructions : ''}`;
 }
 
+// Precargar configuración de Allopack al iniciar
+const allopackConfig = {
+  client_id: 'allopack_001',
+  company_name: 'Allopack',
+  industry: 'Empaque industrial y cartón corrugado',
+  products: [
+    'Cajas de cartón corrugado personalizadas',
+    'Cajas troqueladas con diseño',
+    'Empaques para ecommerce',
+    'Soluciones de empaque industrial'
+  ],
+  value_proposition: 'Entrega exprés 24-48 horas, calidad ISO 9001:2015, precios 8-15% más competitivos que la competencia',
+  conditions: {
+    pricing: 'Desde $5 MXN por caja (dependiendo volumen y especificaciones)',
+    min_order: '100 cajas mínimo',
+    coverage: 'CDMX, Estado de México, Guadalajara, Monterrey',
+    delivery_time: '24-48 horas estándar, urgencias en 12 horas'
+  },
+  sales_goal: 'conseguir_email_y_agendar',
+  additional_instructions: `CONTEXTO ESPECÍFICO DE ALLOPACK:
+Somos fabricantes directos, no intermediarios. Tenemos planta en Naucalpan, Estado de México. Nuestros clientes principales son empresas de ecommerce, retailers y distribuidoras. Competimos contra Cartonajes Estrella, Smurfit Kappa y proveedores chinos (pero somos más rápidos). El precio promedio del mercado es $7-12 MXN por caja; nosotros podemos ofrecer desde $5 MXN en volúmenes mayores. Las cajas se cotizan por millar. Las cajas troqueladas llevan diseño pero son más caras. Menciona que trabajamos con Amazon, Mercado Libre y retailers. Si preguntan por certificaciones, menciona ISO 9001:2015. Para pedidos mayores a 1000 cajas, hay descuentos por volumen. En temporada alta (noviembre-diciembre para ecommerce), los tiempos pueden ser de 3-5 días. Siempre preguntar: ¿qué tipo de producto empacan? ¿qué medidas necesitan? ¿cuántas cajas al mes compran? Esto ayuda a dar mejor precio.`
+};
+
+clientConfigs.set('allopack_001', allopackConfig);
+console.log('✅ Configuración de Allopack precargada al iniciar servidor');
+
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', clients: clientConfigs.size });
+  res.json({ 
+    status: 'ok', 
+    clients: clientConfigs.size,
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  });
 });
 
 app.post('/incoming-call', (req, res) => {
@@ -176,7 +207,10 @@ app.post('/incoming-call', (req, res) => {
   
   callClientMap.set(CallSid, clientId);
   
-  console.log(`📞 Llamada de ${From} | CallSid: ${CallSid} | Cliente: ${clientId}`);
+  console.log(`📞 Llamada entrante`);
+  console.log(`   De: ${From}`);
+  console.log(`   CallSid: ${CallSid}`);
+  console.log(`   Cliente: ${clientId}`);
   
   const twiml = new VoiceResponse();
   const connect = twiml.connect();
@@ -192,6 +226,9 @@ app.ws('/media-stream', (ws, req) => {
   let config = getClientConfig(clientId);
   let openAiWs, streamSid, callSid;
   let transcript = { client: [], agent: [], captured_data: {} };
+  let sessionInitialized = false;
+  
+  console.log('🔵 Nueva conexión WebSocket');
   
   ws.on('message', (msg) => {
     try {
@@ -201,18 +238,22 @@ app.ws('/media-stream', (ws, req) => {
         streamSid = m.start.streamSid;
         callSid = m.start.callSid;
         
-        console.log(`🔵 Stream started | StreamSid: ${streamSid}`);
+        console.log(`\n🎙️  Stream iniciado`);
+        console.log(`   StreamSid: ${streamSid}`);
+        console.log(`   CallSid: ${callSid}`);
         
         callTranscripts.set(callSid, transcript);
         
         if (callClientMap.has(callSid)) {
           clientId = callClientMap.get(callSid);
           config = getClientConfig(clientId);
-          console.log(`🎙️ WebSocket conectado | CallSid: ${callSid} | Cliente: ${clientId} | Empresa: ${config.company_name}`);
+          console.log(`   Cliente identificado: ${clientId}`);
+          console.log(`   Empresa: ${config.company_name}`);
         } else {
-          console.log(`⚠️ CallSid ${callSid} no encontrado en el mapa, usando default`);
+          console.log(`⚠️  CallSid no encontrado en mapa, usando config default`);
         }
         
+        // Conectar a OpenAI
         openAiWs = new WebSocket(
           'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17',
           { 
@@ -224,93 +265,133 @@ app.ws('/media-stream', (ws, req) => {
         );
         
         openAiWs.on('open', () => {
-          console.log(`✅ OpenAI WebSocket conectado para ${config.company_name}`);
-          openAiWs.send(JSON.stringify({
+          console.log(`✅ OpenAI conectado para ${config.company_name}`);
+          
+          const sessionConfig = {
             type: 'session.update',
             session: {
               modalities: ['text', 'audio'],
               turn_detection: { 
                 type: 'server_vad',
-                threshold: 0.75,
-                prefix_padding_ms: 400,
-                silence_duration_ms: 1200
+                threshold: 0.5,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 500
               },
               input_audio_format: 'g711_ulaw',
               output_audio_format: 'g711_ulaw',
               voice: 'nova',
               instructions: buildPrompt(config),
-              temperature: 0.9,
-              max_response_output_tokens: 250,
+              temperature: 0.8,
+              max_response_output_tokens: 'inf',
               input_audio_transcription: {
                 model: 'whisper-1'
               }
             }
-          }));
+          };
+          
+          openAiWs.send(JSON.stringify(sessionConfig));
+          sessionInitialized = true;
+          console.log('📋 Sesión configurada con prompt en español');
         });
         
         openAiWs.on('message', (data) => {
-          const r = JSON.parse(data);
-          
-          if (r.type === 'response.audio.delta' && r.delta) {
-            console.log(`🔊 Audio delta | Length: ${r.delta.length} | Sample: ${r.delta.substring(0, 30)}...`);
+          try {
+            const r = JSON.parse(data);
             
-            const twilioPayload = {
-              event: 'media',
-              streamSid: streamSid,
-              media: {
-                payload: r.delta
+            // CRÍTICO: Enviar audio a Twilio
+            if (r.type === 'response.audio.delta' && r.delta) {
+              const audioPayload = {
+                event: 'media',
+                streamSid: streamSid,
+                media: {
+                  payload: r.delta
+                }
+              };
+              
+              ws.send(JSON.stringify(audioPayload));
+              
+              // Log solo cada 10 deltas para no saturar
+              if (Math.random() < 0.1) {
+                console.log(`🔊 Audio → Twilio (${r.delta.length} chars)`);
               }
-            };
+            }
             
-            ws.send(JSON.stringify(twilioPayload));
-            console.log(`📤 Sent to Twilio | StreamSid: ${streamSid} verified`);
-          }
-          
-          if (r.type === 'conversation.item.input_audio_transcription.completed') {
-            transcript.client.push(r.transcript);
-            console.log(`👤 Cliente: ${r.transcript}`);
-          }
-          
-          if (r.type === 'response.audio_transcript.delta' && r.delta) {
-            console.log(`🤖 Agente (audio): ${r.delta}`);
-          }
-          
-          if (r.type === 'response.done' && r.response.output) {
-            r.response.output.forEach(item => {
-              if (item.type === 'message' && item.content) {
-                item.content.forEach(content => {
-                  if (content.type === 'text') {
-                    transcript.agent.push(content.text);
-                    console.log(`🤖 Agente (texto): ${content.text}`);
-                    
-                    const emailMatch = content.text.match(/\[EMAIL:([^\]]+)\]/);
-                    const phoneMatch = content.text.match(/\[PHONE:([^\]]+)\]/);
-                    const nameMatch = content.text.match(/\[NAME:([^\]]+)\]/);
-                    const companyMatch = content.text.match(/\[COMPANY:([^\]]+)\]/);
-                    
-                    if (emailMatch) transcript.captured_data.email = emailMatch[1];
-                    if (phoneMatch) transcript.captured_data.phone = phoneMatch[1];
-                    if (nameMatch) transcript.captured_data.name = nameMatch[1];
-                    if (companyMatch) transcript.captured_data.company = companyMatch[1];
-                  }
-                });
-              }
-            });
+            // Capturar transcripción del cliente
+            if (r.type === 'conversation.item.input_audio_transcription.completed') {
+              transcript.client.push(r.transcript);
+              console.log(`👤 Cliente: "${r.transcript}"`);
+            }
+            
+            // Capturar respuesta del agente (texto)
+            if (r.type === 'response.audio_transcript.delta' && r.delta) {
+              console.log(`🤖 Agente: ${r.delta}`);
+            }
+            
+            // Capturar datos al finalizar respuesta
+            if (r.type === 'response.done' && r.response?.output) {
+              r.response.output.forEach(item => {
+                if (item.type === 'message' && item.content) {
+                  item.content.forEach(content => {
+                    if (content.type === 'text') {
+                      transcript.agent.push(content.text);
+                      
+                      // Extraer datos etiquetados
+                      const emailMatch = content.text.match(/\[EMAIL:([^\]]+)\]/);
+                      const phoneMatch = content.text.match(/\[PHONE:([^\]]+)\]/);
+                      const nameMatch = content.text.match(/\[NAME:([^\]]+)\]/);
+                      const companyMatch = content.text.match(/\[COMPANY:([^\]]+)\]/);
+                      
+                      if (emailMatch) {
+                        transcript.captured_data.email = emailMatch[1];
+                        console.log(`📧 Email capturado: ${emailMatch[1]}`);
+                      }
+                      if (phoneMatch) {
+                        transcript.captured_data.phone = phoneMatch[1];
+                        console.log(`📞 Teléfono capturado: ${phoneMatch[1]}`);
+                      }
+                      if (nameMatch) {
+                        transcript.captured_data.name = nameMatch[1];
+                        console.log(`👤 Nombre capturado: ${nameMatch[1]}`);
+                      }
+                      if (companyMatch) {
+                        transcript.captured_data.company = companyMatch[1];
+                        console.log(`🏢 Empresa capturada: ${companyMatch[1]}`);
+                      }
+                    }
+                  });
+                }
+              });
+            }
+            
+            // Log de errores
+            if (r.type === 'error') {
+              console.error('❌ Error de OpenAI:', r.error);
+            }
+            
+          } catch (error) {
+            console.error('❌ Error procesando mensaje de OpenAI:', error);
           }
         });
         
         openAiWs.on('error', (error) => {
-          console.error('❌ Error OpenAI WebSocket:', error);
+          console.error('❌ Error en WebSocket de OpenAI:', error);
+        });
+        
+        openAiWs.on('close', () => {
+          console.log('🔌 WebSocket de OpenAI cerrado');
         });
       }
       else if (m.event === 'media' && openAiWs && openAiWs.readyState === 1) {
-        openAiWs.send(JSON.stringify({ 
-          type: 'input_audio_buffer.append', 
-          audio: m.media.payload 
-        }));
+        // Enviar audio del cliente a OpenAI
+        if (sessionInitialized) {
+          openAiWs.send(JSON.stringify({ 
+            type: 'input_audio_buffer.append', 
+            audio: m.media.payload 
+          }));
+        }
       }
       else if (m.event === 'stop') {
-        console.log('🛑 Stream detenido');
+        console.log('\n🛑 Stream detenido');
         
         if (callSid && callTranscripts.has(callSid)) {
           const finalTranscript = callTranscripts.get(callSid);
@@ -331,11 +412,11 @@ app.ws('/media-stream', (ws, req) => {
   });
   
   ws.on('close', () => {
-    console.log('🔌 WebSocket cliente cerrado');
+    console.log('🔌 WebSocket de Twilio cerrado');
     
     if (callSid && callTranscripts.has(callSid)) {
       const finalTranscript = callTranscripts.get(callSid);
-      console.log('\n📋 TRANSCRIPCIÓN COMPLETA (on close):');
+      console.log('\n📋 TRANSCRIPCIÓN FINAL (on close):');
       console.log(JSON.stringify(finalTranscript, null, 2));
     }
     
@@ -345,6 +426,10 @@ app.ws('/media-stream', (ws, req) => {
     
     if (openAiWs) openAiWs.close();
   });
+  
+  ws.on('error', (error) => {
+    console.error('❌ Error en WebSocket de Twilio:', error);
+  });
 });
 
 app.post('/api/clients/:clientId/config', (req, res) => {
@@ -352,7 +437,8 @@ app.post('/api/clients/:clientId/config', (req, res) => {
   config.client_id = req.params.clientId;
   clientConfigs.set(req.params.clientId, config);
   console.log(`✅ Config guardada para ${req.params.clientId}`);
-  res.json({ success: true, clientId: req.params.clientId });
+  console.log(`   Empresa: ${config.company_name}`);
+  res.json({ success: true, clientId: req.params.clientId, config: config });
 });
 
 app.get('/api/clients/:clientId/config', (req, res) => {
@@ -372,13 +458,22 @@ app.get('/api/transcripts/:callSid', (req, res) => {
 app.get('/api/transcripts', (req, res) => {
   const allTranscripts = Array.from(callTranscripts.entries()).map(([callSid, data]) => ({
     callSid,
-    ...data
+    ...data,
+    timestamp: new Date().toISOString()
   }));
   res.json(allTranscripts);
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Vendedor Universal corriendo en puerto ${PORT}`);
-  console.log(`📞 Endpoint: /incoming-call`);
-  console.log(`⚙️  API Config: /api/clients/:clientId/config`);
+  console.log(`\n🚀 ═══════════════════════════════════════════`);
+  console.log(`   VENDEDOR UNIVERSAL - SERVIDOR ACTIVO`);
+  console.log(`═══════════════════════════════════════════\n`);
+  console.log(`📡 Puerto: ${PORT}`);
+  console.log(`📞 Endpoint llamadas: POST /incoming-call?client=CLIENT_ID`);
+  console.log(`⚙️  Config API: POST /api/clients/:id/config`);
+  console.log(`📊 Transcripciones: GET /api/transcripts`);
+  console.log(`💚 Health check: GET /health`);
+  console.log(`\n📦 Clientes precargados: ${clientConfigs.size}`);
+  console.log(`   - allopack_001: ${allopackConfig.company_name}`);
+  console.log(`\n✅ Listo para recibir llamadas\n`);
 });
