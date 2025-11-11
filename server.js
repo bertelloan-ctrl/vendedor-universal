@@ -279,7 +279,7 @@ app.ws('/media-stream', (ws, req) => {
               },
               input_audio_format: 'g711_ulaw',
               output_audio_format: 'g711_ulaw',
-              voice: 'nova',
+              voice: 'shimmer',
               instructions: buildPrompt(config),
               temperature: 0.8,
               max_response_output_tokens: 'inf',
