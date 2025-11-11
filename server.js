@@ -11,7 +11,8 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const PORT = process.env.PORT || 3000;
 
 const clientConfigs = new Map();
-const callClientMap = new Map(); // Mapa para asociar CallSid -> clientId
+const callClientMap = new Map();
+const callTranscripts = new Map(); // Almacenar transcripciones // Mapa para asociar CallSid -> clientId
 
 function getClientConfig(clientId) {
   if (!clientConfigs.has(clientId)) {
@@ -100,6 +101,30 @@ Si hay urgencia: "¿Y pa cuándo necesitarías el material? Igual podemos cotiza
 - NO preguntes "¿por qué no?"
 - Acepta y cierra cordial
 
+═══ CAPTURA DE DATOS CRÍTICOS ═══
+
+EMAILS Y TELÉFONOS:
+Cuando captures email o teléfono, REPÍTELO LETRA POR LETRA:
+
+EMAIL:
+"Perfecto, ¿a qué correo? ... Aha, entonces es: equis-ele-@allopack.com, ¿correcto?"
+- Deletrea CADA letra: "a de árbol, b de burro, c de casa"
+- Confirma SIEMPRE
+
+TELÉFONO:
+"¿Y tu teléfono? ... Okay, anoto: cinco-cinco-uno-dos-tres-cuatro-cinco-seis-siete-ocho, ¿está bien?"
+- Repite número por número
+- Confirma SIEMPRE
+
+MARCA CON ETIQUETAS:
+Cuando captures datos, usa estas etiquetas en tu respuesta:
+- Email: "[EMAIL:correo@ejemplo.com]"
+- Teléfono: "[PHONE:5512345678]"
+- Nombre: "[NAME:Roberto García]"
+- Empresa cliente: "[COMPANY:Coca Cola]"
+
+Ejemplo: "Perfecto Roberto [NAME:Roberto García], te mando la info a roberto@cocacola.com [EMAIL:roberto@cocacola.com]"
+
 ═══ MANEJO DE OBJECIONES ═══
 
 "NO TENGO TIEMPO":
@@ -170,6 +195,7 @@ app.ws('/media-stream', (ws, req) => {
   let clientId = 'default';
   let config = getClientConfig(clientId);
   let openAiWs, streamSid, callSid;
+  let transcript = { client: [], agent: [], captured_data: {} };
   
   ws.on('message', (msg) => {
     try {
@@ -178,6 +204,9 @@ app.ws('/media-stream', (ws, req) => {
       if (m.event === 'start') {
         streamSid = m.start.streamSid;
         callSid = m.start.callSid;
+        
+        // Inicializar transcripción
+        callTranscripts.set(callSid, transcript);
         
         // Obtener el clientId desde el mapa usando el CallSid
         if (callClientMap.has(callSid)) {
@@ -206,22 +235,56 @@ app.ws('/media-stream', (ws, req) => {
             session: {
               turn_detection: { 
                 type: 'server_vad',
-                threshold: 0.75,
-                prefix_padding_ms: 300,
-                silence_duration_ms: 1200
+                threshold: 0.8,
+                prefix_padding_ms: 400,
+                silence_duration_ms: 1500
               },
               input_audio_format: 'g711_ulaw',
               output_audio_format: 'g711_ulaw',
-              voice: 'shimmer',
+              voice: 'nova',
               instructions: buildPrompt(config),
               temperature: 0.9,
-              max_response_output_tokens: 250
+              max_response_output_tokens: 250,
+              input_audio_transcription: { model: 'whisper-1' }
             }
           }));
         });
         
         openAiWs.on('message', (data) => {
           const r = JSON.parse(data);
+          
+          // Transcripción del cliente
+          if (r.type === 'conversation.item.input_audio_transcription.completed') {
+            transcript.client.push(r.transcript);
+            console.log(`👤 Cliente: ${r.transcript}`);
+          }
+          
+          // Respuesta del agente (texto)
+          if (r.type === 'response.done' && r.response.output) {
+            r.response.output.forEach(item => {
+              if (item.type === 'message' && item.content) {
+                item.content.forEach(content => {
+                  if (content.type === 'text') {
+                    transcript.agent.push(content.text);
+                    console.log(`🤖 Agente: ${content.text}`);
+                    
+                    // Extraer datos capturados
+                    const emailMatch = content.text.match(/\[EMAIL:([^\]]+)\]/);
+                    const phoneMatch = content.text.match(/\[PHONE:([^\]]+)\]/);
+                    const nameMatch = content.text.match(/\[NAME:([^\]]+)\]/);
+                    const companyMatch = content.text.match(/\[COMPANY:([^\]]+)\]/);
+                    
+                    if (emailMatch) transcript.captured_data.email = emailMatch[1];
+                    if (phoneMatch) transcript.captured_data.phone = phoneMatch[1];
+                    if (nameMatch) transcript.captured_data.name = nameMatch[1];
+                    if (companyMatch) transcript.captured_data.company = companyMatch[1];
+                  }
+                });
+              }
+            });
+          }
+          
+          // Audio delta
           if (r.type === 'response.audio.delta' && r.delta) {
             ws.send(JSON.stringify({ 
               event: 'media', 
@@ -244,9 +307,18 @@ app.ws('/media-stream', (ws, req) => {
       else if (m.event === 'stop') {
         console.log('🛑 Stream detenido');
         
-        // Limpiar el mapa
+        // Guardar transcripción final
+        if (callSid && callTranscripts.has(callSid)) {
+          const finalTranscript = callTranscripts.get(callSid);
+          console.log('\n📋 TRANSCRIPCIÓN COMPLETA:');
+          console.log(JSON.stringify(finalTranscript, null, 2));
+        }
+        
+        // Limpiar
         if (callSid) {
           callClientMap.delete(callSid);
+          // Mantener transcripción por 1 hora
+          setTimeout(() => callTranscripts.delete(callSid), 3600000);
         }
         
         if (openAiWs) openAiWs.close();
@@ -259,7 +331,13 @@ app.ws('/media-stream', (ws, req) => {
   ws.on('close', () => {
     console.log('🔌 WebSocket cliente cerrado');
     
-    // Limpiar el mapa
+    // Guardar transcripción final
+    if (callSid && callTranscripts.has(callSid)) {
+      const finalTranscript = callTranscripts.get(callSid);
+      console.log('\n📋 TRANSCRIPCIÓN COMPLETA (on close):');
+      console.log(JSON.stringify(finalTranscript, null, 2));
+    }
+    
     if (callSid) {
       callClientMap.delete(callSid);
     }
@@ -281,6 +359,25 @@ app.post('/api/clients/:clientId/config', (req, res) => {
 app.get('/api/clients/:clientId/config', (req, res) => {
   const config = getClientConfig(req.params.clientId);
   res.json(config);
+});
+
+// API: Obtener transcripción de llamada
+app.get('/api/transcripts/:callSid', (req, res) => {
+  const transcript = callTranscripts.get(req.params.callSid);
+  if (transcript) {
+    res.json(transcript);
+  } else {
+    res.status(404).json({ error: 'Transcripción no encontrada' });
+  }
+});
+
+// API: Obtener todas las transcripciones
+app.get('/api/transcripts', (req, res) => {
+  const allTranscripts = Array.from(callTranscripts.entries()).map(([callSid, data]) => ({
+    callSid,
+    ...data
+  }));
+  res.json(allTranscripts);
 });
 
 app.listen(PORT, () => {
