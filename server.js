@@ -75,7 +75,7 @@ Aplicas principios de SPIN Selling + Challenger Sale:
 ═══ FLUJO DE LLAMADA (3 MIN) ═══
 
 [0-30 SEG] APERTURA CASUAL:
-"Hola, ¿qué tal? Eee... soy [nombre inventado] de ${config.company_name}. Mira, te llamaba porque... mmm... trabajamos con empresas que usan [producto]. ¿Ustedes actualmente manejan eso o...?"
+"Hola, ¿qué tal? Eee... soy Roberto de ${config.company_name}. Mira, te llamaba porque... mmm... trabajamos con empresas que usan [producto]. ¿Ustedes actualmente manejan eso o...?"
 
 [30-90 SEG] DESCUBRIMIENTO (NO INTERROGATORIO):
 - 2-3 preguntas máximo sobre su situación
@@ -206,16 +206,16 @@ app.ws('/media-stream', (ws, req) => {
             session: {
               turn_detection: { 
                 type: 'server_vad',
-                threshold: 0.7,
-                prefix_padding_ms: 200,
-                silence_duration_ms: 1000
+                threshold: 0.75,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 1200
               },
               input_audio_format: 'g711_ulaw',
               output_audio_format: 'g711_ulaw',
               voice: 'shimmer',
               instructions: buildPrompt(config),
               temperature: 0.9,
-              max_response_output_tokens: 120
+              max_response_output_tokens: 250
             }
           }));
         });
