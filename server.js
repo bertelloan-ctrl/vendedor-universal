@@ -235,9 +235,9 @@ app.ws('/media-stream', (ws, req) => {
             session: {
               turn_detection: { 
                 type: 'server_vad',
-                threshold: 0.8,
+                threshold: 0.75,
                 prefix_padding_ms: 400,
-                silence_duration_ms: 1500
+                silence_duration_ms: 1200
               },
               input_audio_format: 'g711_ulaw',
               output_audio_format: 'g711_ulaw',
@@ -245,7 +245,9 @@ app.ws('/media-stream', (ws, req) => {
               instructions: buildPrompt(config),
               temperature: 0.9,
               max_response_output_tokens: 250,
-              input_audio_transcription: { model: 'whisper-1' }
+              input_audio_transcription: {
+                model: 'whisper-1'
+              }
             }
           }));
         });
@@ -253,20 +255,34 @@ app.ws('/media-stream', (ws, req) => {
         openAiWs.on('message', (data) => {
           const r = JSON.parse(data);
           
-          // Transcripción del cliente
+          // Audio delta - PRIORIDAD
+          if (r.type === 'response.audio.delta' && r.delta) {
+            ws.send(JSON.stringify({ 
+              event: 'media', 
+              streamSid, 
+              media: { payload: r.delta }
+            }));
+          }
+          
+          // Transcripción del cliente (opcional, para logs)
           if (r.type === 'conversation.item.input_audio_transcription.completed') {
             transcript.client.push(r.transcript);
             console.log(`👤 Cliente: ${r.transcript}`);
           }
           
-          // Respuesta del agente (texto)
+          // Transcripción del agente (opcional, para logs)
+          if (r.type === 'response.audio_transcript.delta' && r.delta) {
+            console.log(`🤖 Agente (audio): ${r.delta}`);
+          }
+          
+          // Respuesta completa del agente (texto)
           if (r.type === 'response.done' && r.response.output) {
             r.response.output.forEach(item => {
               if (item.type === 'message' && item.content) {
                 item.content.forEach(content => {
                   if (content.type === 'text') {
                     transcript.agent.push(content.text);
-                    console.log(`🤖 Agente: ${content.text}`);
+                    console.log(`🤖 Agente (texto): ${content.text}`);
                     
                     // Extraer datos capturados
                     const emailMatch = content.text.match(/\[EMAIL:([^\]]+)\]/);
@@ -282,15 +298,6 @@ app.ws('/media-stream', (ws, req) => {
                 });
               }
             });
-          }
-          
-          // Audio delta
-          if (r.type === 'response.audio.delta' && r.delta) {
-            ws.send(JSON.stringify({ 
-              event: 'media', 
-              streamSid, 
-              media: { payload: r.delta }
-            }));
           }
         });
         
