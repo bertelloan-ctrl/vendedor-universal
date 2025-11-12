@@ -292,11 +292,30 @@ app.ws('/media-stream', (ws, req) => {
           openAiWs.send(JSON.stringify(sessionConfig));
           sessionInitialized = true;
           console.log('📋 Sesión configurada con prompt en español');
+          
+          // Enviar mensaje inicial para que OpenAI empiece a hablar
+          setTimeout(() => {
+            if (openAiWs.readyState === 1) {
+              openAiWs.send(JSON.stringify({
+                type: 'response.create',
+                response: {
+                  modalities: ['text', 'audio'],
+                  instructions: 'Inicia la llamada de ventas saludando al cliente como está indicado en tus instrucciones.'
+                }
+              }));
+              console.log('🎬 Mensaje inicial enviado a OpenAI');
+            }
+          }, 250);
         });
         
         openAiWs.on('message', (data) => {
           try {
             const r = JSON.parse(data);
+            
+            // Log de TODOS los eventos para debug (solo tipo)
+            if (!['response.audio.delta', 'input_audio_buffer.speech_started', 'input_audio_buffer.speech_stopped'].includes(r.type)) {
+              console.log(`🔔 OpenAI event: ${r.type}`);
+            }
             
             // CRÍTICO: Enviar audio a Twilio
             if (r.type === 'response.audio.delta' && r.delta) {
@@ -411,6 +430,11 @@ app.ws('/media-stream', (ws, req) => {
             type: 'input_audio_buffer.append', 
             audio: m.media.payload 
           }));
+          
+          // Log cada 100 paquetes de audio para ver que está fluyendo
+          if (Math.random() < 0.01) {
+            console.log(`🎤 Audio del cliente → OpenAI (${m.media.payload.length} chars)`);
+          }
         }
       }
       else if (m.event === 'stop') {
@@ -515,4 +539,5 @@ app.listen(PORT, () => {
   console.log(`\n📦 Clientes precargados: ${clientConfigs.size}`);
   console.log(`   - allopack_001: ${allopackConfig.company_name}`);
   console.log(`\n✅ Listo para recibir llamadas\n`);
+});
 });
