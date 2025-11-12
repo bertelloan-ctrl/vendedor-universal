@@ -540,4 +540,3 @@ app.listen(PORT, () => {
   console.log(`   - allopack_001: ${allopackConfig.company_name}`);
   console.log(`\n✅ Listo para recibir llamadas\n`);
 });
-});
