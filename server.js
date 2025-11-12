@@ -325,6 +325,29 @@ app.ws('/media-stream', (ws, req) => {
             // Capturar respuesta del agente (texto)
             if (r.type === 'response.audio_transcript.delta' && r.delta) {
               console.log(`🤖 Agente: ${r.delta}`);
+              
+              // Extraer datos etiquetados también desde el delta
+              const emailMatch = r.delta.match(/\[EMAIL:([^\]]+)\]/);
+              const phoneMatch = r.delta.match(/\[PHONE:([^\]]+)\]/);
+              const nameMatch = r.delta.match(/\[NAME:([^\]]+)\]/);
+              const companyMatch = r.delta.match(/\[COMPANY:([^\]]+)\]/);
+              
+              if (emailMatch) {
+                transcript.captured_data.email = emailMatch[1];
+                console.log(`📧 Email capturado: ${emailMatch[1]}`);
+              }
+              if (phoneMatch) {
+                transcript.captured_data.phone = phoneMatch[1];
+                console.log(`📞 Teléfono capturado: ${phoneMatch[1]}`);
+              }
+              if (nameMatch) {
+                transcript.captured_data.name = nameMatch[1];
+                console.log(`👤 Nombre capturado: ${nameMatch[1]}`);
+              }
+              if (companyMatch) {
+                transcript.captured_data.company = companyMatch[1];
+                console.log(`🏢 Empresa capturada: ${companyMatch[1]}`);
+              }
             }
             
             // Capturar datos al finalizar respuesta
@@ -395,8 +418,19 @@ app.ws('/media-stream', (ws, req) => {
         
         if (callSid && callTranscripts.has(callSid)) {
           const finalTranscript = callTranscripts.get(callSid);
-          console.log('\n📋 TRANSCRIPCIÓN COMPLETA:');
-          console.log(JSON.stringify(finalTranscript, null, 2));
+          
+          console.log('\n═══════════════════════════════════════');
+          console.log('📋 RESUMEN DE LLAMADA');
+          console.log('═══════════════════════════════════════');
+          console.log(`CallSid: ${callSid}`);
+          console.log(`Cliente: ${clientId} (${config.company_name})`);
+          console.log(`\n📊 DATOS CAPTURADOS:`);
+          console.log(JSON.stringify(finalTranscript.captured_data, null, 2));
+          console.log(`\n💬 TRANSCRIPCIÓN CLIENTE:`);
+          finalTranscript.client.forEach((msg, i) => {
+            console.log(`  ${i+1}. ${msg}`);
+          });
+          console.log('═══════════════════════════════════════\n');
         }
         
         if (callSid) {
@@ -416,8 +450,13 @@ app.ws('/media-stream', (ws, req) => {
     
     if (callSid && callTranscripts.has(callSid)) {
       const finalTranscript = callTranscripts.get(callSid);
-      console.log('\n📋 TRANSCRIPCIÓN FINAL (on close):');
-      console.log(JSON.stringify(finalTranscript, null, 2));
+      
+      console.log('\n═══════════════════════════════════════');
+      console.log('📋 RESUMEN FINAL (WebSocket cerrado)');
+      console.log('═══════════════════════════════════════');
+      console.log(`\n📊 DATOS CAPTURADOS:`);
+      console.log(JSON.stringify(finalTranscript.captured_data, null, 2));
+      console.log('═══════════════════════════════════════\n');
     }
     
     if (callSid) {
