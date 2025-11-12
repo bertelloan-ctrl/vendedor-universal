@@ -82,7 +82,9 @@ Aplicas principios de SPIN Selling + Challenger Sale:
 ═══ FLUJO DE LLAMADA (3 MIN) ═══
 
 [0-30 SEG] APERTURA CASUAL:
-"Hola, ¿qué tal? Eee... soy Roberto de ${config.company_name}. Mira, te llamaba porque... mmm... trabajamos con empresas que usan [producto]. ¿Ustedes actualmente manejan eso o...?"
+"Hola, ¿qué tal? Eee... soy Roberto de ${config.company_name}. Mira, te llamaba porque... mmm... trabajamos con empresas que necesitan cajas y empaques. ¿Ustedes actualmente manejan eso o...?"
+
+IMPORTANTE: Tu nombre es Roberto, NO uses placeholders como [Tu Nombre]. Di directamente "soy Roberto de ${config.company_name}".
 
 [30-90 SEG] DESCUBRIMIENTO (NO INTERROGATORIO):
 - 2-3 preguntas máximo sobre su situación
@@ -279,9 +281,9 @@ app.ws('/media-stream', (ws, req) => {
               modalities: ['text', 'audio'],
               turn_detection: { 
                 type: 'server_vad',
-                threshold: 0.7,
-                prefix_padding_ms: 500,
-                silence_duration_ms: 1000
+                threshold: 0.6,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 800
               },
               input_audio_format: 'g711_ulaw',
               output_audio_format: 'g711_ulaw',
@@ -303,15 +305,26 @@ app.ws('/media-stream', (ws, req) => {
           setTimeout(() => {
             if (openAiWs.readyState === 1) {
               openAiWs.send(JSON.stringify({
-                type: 'response.create',
-                response: {
-                  modalities: ['text', 'audio'],
-                  instructions: 'Inicia la llamada de ventas saludando al cliente como está indicado en tus instrucciones.'
+                type: 'conversation.item.create',
+                item: {
+                  type: 'message',
+                  role: 'user',
+                  content: [
+                    {
+                      type: 'input_text',
+                      text: 'Hola'
+                    }
+                  ]
                 }
               }));
-              console.log('🎬 Mensaje inicial enviado a OpenAI');
+              
+              openAiWs.send(JSON.stringify({
+                type: 'response.create'
+              }));
+              
+              console.log('🎬 Conversación iniciada');
             }
-          }, 250);
+          }, 500);
         });
         
         openAiWs.on('message', (data) => {
@@ -321,6 +334,16 @@ app.ws('/media-stream', (ws, req) => {
             // Log de TODOS los eventos para debug (solo tipo)
             if (!['response.audio.delta', 'input_audio_buffer.speech_started', 'input_audio_buffer.speech_stopped'].includes(r.type)) {
               console.log(`🔔 OpenAI event: ${r.type}`);
+            }
+            
+            // Log especial para response.created
+            if (r.type === 'response.created') {
+              console.log('📢 OpenAI empezando a generar respuesta...');
+            }
+            
+            // Log especial para response.done
+            if (r.type === 'response.done') {
+              console.log('✅ OpenAI terminó de generar respuesta');
             }
             
             // CRÍTICO: Enviar audio a Twilio
