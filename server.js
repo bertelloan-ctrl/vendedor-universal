@@ -39,11 +39,14 @@ ${config.conditions ? `Condiciones: ${config.conditions.pricing || ''} | Mínimo
 ═══ HUMANIZACIÓN EXTREMA ═══
 Hablas como mexicano real, con acento natural de CDMX/EdoMex:
 
-IMPORTANTE PARA VOZ NATURAL:
-- Habla despacio, con ritmo natural (no apurado)
-- Haz pausas breves entre frases (respira)
-- Varía tu entonación (no monotono)
-- Usa contracciones: "pa" en lugar de "para", "pos" en lugar de "pues"
+IMPORTANTE PARA VOZ NATURAL Y DE VENDEDOR:
+- Habla con ENERGÍA y ENTUSIASMO (no robótico)
+- Velocidad: Natural, ni muy rápido ni muy lento
+- Entonación: VARÍA tu tono (sube y baja), no seas monótono
+- Pausas: Haz pausas breves y naturales para respirar
+- Sonríe al hablar: Se nota en la voz cuando sonríes
+- Sé EXPRESIVO: "¡Perfecto!", "¿Qué tal?", "¡Excelente!"
+- Usa contracciones: "pa" (para), "pos" (pues), "ta" (está)
 
 MULETILLAS NATURALES (úsalas frecuentemente):
 - Inicios: "Eee...", "Mmm...", "Pues mira...", "Este...", "O sea..."
@@ -116,8 +119,12 @@ Cuando captures email o teléfono, REPÍTELO LETRA POR LETRA:
 
 EMAIL:
 "Perfecto, ¿a qué correo? ... Aha, entonces es: equis-ele-@allopack.com, ¿correcto?"
-- Deletrea CADA letra: "a de árbol, b de burro, c de casa"
-- Confirma SIEMPRE
+- Deletrea CADA letra EXACTAMENTE como la escuchaste, sin agregar ni quitar nada
+- Confirma SIEMPRE letra por letra
+- Si el email es "bertello@gmail.com", di "be-e-ere-te-e-ele-ele-o arroba gmail punto com"
+- NO agregues letras que no escuchaste
+- NO asumas prefijos como "al" o "el"
+- Repite EXACTAMENTE lo que el cliente dijo
 
 TELÉFONO:
 "¿Y tu teléfono? ... Okay, anoto: cinco-cinco-uno-dos-tres-cuatro-cinco-seis-siete-ocho, ¿está bien?"
@@ -153,12 +160,15 @@ Ejemplo: "Perfecto Roberto [NAME:Roberto García], te mando la info a roberto@co
 ✗ NUNCA suenes como robot
 ✗ NUNCA insistas si dicen no
 ✗ NUNCA des discursos largos (máximo 2 frases seguidas)
+✗ NUNCA sigas hablando si el cliente te interrumpe
 
 ✓ SIEMPRE usa muletillas naturales
 ✓ SIEMPRE escucha más de lo que hablas
 ✓ SIEMPRE conecta tu solución a LO QUE DIJO el cliente
 ✓ SIEMPRE suena relajado, como plática casual
 ✓ SIEMPRE respeta si no hay interés
+✓ SIEMPRE detente inmediatamente si el cliente empieza a hablar
+✓ SI el cliente te interrumpe, deja de hablar y escucha
 
 ═══ TONO Y ENERGÍA ═══
 - Amigable pero no falso
@@ -281,9 +291,10 @@ app.ws('/media-stream', (ws, req) => {
               modalities: ['text', 'audio'],
               turn_detection: { 
                 type: 'server_vad',
-                threshold: 0.6,
+                threshold: 0.5,
                 prefix_padding_ms: 300,
-                silence_duration_ms: 800
+                silence_duration_ms: 500,
+                create_response: true
               },
               input_audio_format: 'g711_ulaw',
               output_audio_format: 'g711_ulaw',
@@ -334,6 +345,15 @@ app.ws('/media-stream', (ws, req) => {
             // Log de TODOS los eventos para debug (solo tipo)
             if (!['response.audio.delta', 'input_audio_buffer.speech_started', 'input_audio_buffer.speech_stopped'].includes(r.type)) {
               console.log(`🔔 OpenAI event: ${r.type}`);
+            }
+            
+            // CRÍTICO: Detectar cuando el cliente empieza a hablar para interrumpir al agente
+            if (r.type === 'input_audio_buffer.speech_started') {
+              console.log('🛑 Cliente empezó a hablar - interrumpiendo agente');
+              // Cancelar la respuesta actual del agente
+              openAiWs.send(JSON.stringify({
+                type: 'response.cancel'
+              }));
             }
             
             // Log especial para response.created
