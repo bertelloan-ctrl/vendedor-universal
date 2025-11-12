@@ -39,6 +39,12 @@ ${config.conditions ? `Condiciones: ${config.conditions.pricing || ''} | Mínimo
 ═══ HUMANIZACIÓN EXTREMA ═══
 Hablas como mexicano real, con acento natural de CDMX/EdoMex:
 
+IMPORTANTE PARA VOZ NATURAL:
+- Habla despacio, con ritmo natural (no apurado)
+- Haz pausas breves entre frases (respira)
+- Varía tu entonación (no monotono)
+- Usa contracciones: "pa" en lugar de "para", "pos" en lugar de "pues"
+
 MULETILLAS NATURALES (úsalas frecuentemente):
 - Inicios: "Eee...", "Mmm...", "Pues mira...", "Este...", "O sea..."
 - Transiciones: "...¿no?", "...¿verdad?", "...o sea", "...pues"
@@ -225,7 +231,7 @@ app.ws('/media-stream', (ws, req) => {
   let clientId = 'default';
   let config = getClientConfig(clientId);
   let openAiWs, streamSid, callSid;
-  let transcript = { client: [], agent: [], captured_data: {} };
+  let transcript = { client: [], agent: [], captured_data: {}, agent_full_text: '' };
   let sessionInitialized = false;
   
   console.log('🔵 Nueva conexión WebSocket');
@@ -279,9 +285,9 @@ app.ws('/media-stream', (ws, req) => {
               },
               input_audio_format: 'g711_ulaw',
               output_audio_format: 'g711_ulaw',
-              voice: 'shimmer',
+              voice: 'echo',
               instructions: buildPrompt(config),
-              temperature: 0.8,
+              temperature: 0.9,
               max_response_output_tokens: 'inf',
               input_audio_transcription: {
                 model: 'whisper-1'
@@ -345,25 +351,28 @@ app.ws('/media-stream', (ws, req) => {
             if (r.type === 'response.audio_transcript.delta' && r.delta) {
               console.log(`🤖 Agente: ${r.delta}`);
               
-              // Extraer datos etiquetados también desde el delta
-              const emailMatch = r.delta.match(/\[EMAIL:([^\]]+)\]/);
-              const phoneMatch = r.delta.match(/\[PHONE:([^\]]+)\]/);
-              const nameMatch = r.delta.match(/\[NAME:([^\]]+)\]/);
-              const companyMatch = r.delta.match(/\[COMPANY:([^\]]+)\]/);
+              // Acumular texto completo del agente
+              transcript.agent_full_text += r.delta;
               
-              if (emailMatch) {
+              // Buscar etiquetas en el texto completo acumulado
+              const emailMatch = transcript.agent_full_text.match(/\[EMAIL:([^\]]+)\]/);
+              const phoneMatch = transcript.agent_full_text.match(/\[PHONE:([^\]]+)\]/);
+              const nameMatch = transcript.agent_full_text.match(/\[NAME:([^\]]+)\]/);
+              const companyMatch = transcript.agent_full_text.match(/\[COMPANY:([^\]]+)\]/);
+              
+              if (emailMatch && !transcript.captured_data.email) {
                 transcript.captured_data.email = emailMatch[1];
                 console.log(`📧 Email capturado: ${emailMatch[1]}`);
               }
-              if (phoneMatch) {
+              if (phoneMatch && !transcript.captured_data.phone) {
                 transcript.captured_data.phone = phoneMatch[1];
                 console.log(`📞 Teléfono capturado: ${phoneMatch[1]}`);
               }
-              if (nameMatch) {
+              if (nameMatch && !transcript.captured_data.name) {
                 transcript.captured_data.name = nameMatch[1];
                 console.log(`👤 Nombre capturado: ${nameMatch[1]}`);
               }
-              if (companyMatch) {
+              if (companyMatch && !transcript.captured_data.company) {
                 transcript.captured_data.company = companyMatch[1];
                 console.log(`🏢 Empresa capturada: ${companyMatch[1]}`);
               }
