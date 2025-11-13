@@ -294,8 +294,7 @@ app.ws('/media-stream', (ws, req) => {
                 type: 'server_vad',
                 threshold: 0.5,
                 prefix_padding_ms: 300,
-                silence_duration_ms: 500,
-                create_response: true
+                silence_duration_ms: 600
               },
               input_audio_format: 'g711_ulaw',
               output_audio_format: 'g711_ulaw',
@@ -348,17 +347,11 @@ app.ws('/media-stream', (ws, req) => {
               console.log(`🔔 OpenAI event: ${r.type}`);
             }
             
-            // CRÍTICO: Detectar cuando el cliente empieza a hablar para interrumpir al agente
+            // Detectar cuando el cliente empieza a hablar (solo para logging)
             if (r.type === 'input_audio_buffer.speech_started') {
               console.log('🗣️ Cliente empezó a hablar');
-              // Solo cancelar si hay una respuesta activa del agente
-              if (isAgentSpeaking && openAiWs.readyState === 1) {
-                console.log('🛑 Interrumpiendo agente');
-                openAiWs.send(JSON.stringify({
-                  type: 'response.cancel'
-                }));
-                isAgentSpeaking = false;
-              }
+              // DESHABILITADO: La cancelación causa errores de timing
+              // Dejamos que OpenAI maneje las interrupciones naturalmente con VAD
             }
             
             // Log especial para response.created
