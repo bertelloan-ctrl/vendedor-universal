@@ -248,6 +248,7 @@ app.ws('/media-stream', (ws, req) => {
   let isAgentSpeaking = false;
   let silenceTimeout = null;
   let initialMessageSent = false;
+  let audioChunkCount = 0;
   
   console.log('🔵 Nueva conexión WebSocket');
   
@@ -294,9 +295,9 @@ app.ws('/media-stream', (ws, req) => {
               modalities: ['text', 'audio'],
               turn_detection: { 
                 type: 'server_vad',
-                threshold: 0.3,
-                prefix_padding_ms: 500,
-                silence_duration_ms: 800
+                threshold: 0.2,
+                prefix_padding_ms: 600,
+                silence_duration_ms: 1000
               },
               input_audio_format: 'g711_ulaw',
               output_audio_format: 'g711_ulaw',
@@ -531,9 +532,10 @@ app.ws('/media-stream', (ws, req) => {
             audio: m.media.payload 
           }));
           
-          // Log cada 100 paquetes de audio para ver que está fluyendo
-          if (Math.random() < 0.01) {
-            console.log(`🎤 Audio del cliente → OpenAI (${m.media.payload.length} chars)`);
+          // Log cada 20 paquetes para ver flujo de audio
+          audioChunkCount++;
+          if (audioChunkCount % 20 === 0) {
+            console.log(`🎤 Audio recibido: ${audioChunkCount} chunks (${m.media.payload.length} chars)`);
           }
         }
       }
