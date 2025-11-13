@@ -247,6 +247,7 @@ app.ws('/media-stream', (ws, req) => {
   let sessionInitialized = false;
   let isAgentSpeaking = false;
   let silenceTimeout = null;
+  let initialMessageSent = false;
   
   console.log('🔵 Nueva conexión WebSocket');
   
@@ -315,7 +316,8 @@ app.ws('/media-stream', (ws, req) => {
           
           // Enviar mensaje inicial para que OpenAI empiece a hablar
           setTimeout(() => {
-            if (openAiWs.readyState === 1) {
+            if (openAiWs.readyState === 1 && !initialMessageSent) {
+              initialMessageSent = true;
               openAiWs.send(JSON.stringify({
                 type: 'conversation.item.create',
                 item: {
@@ -394,22 +396,8 @@ app.ws('/media-stream', (ws, req) => {
               console.log('✅ OpenAI terminó de generar respuesta');
               isAgentSpeaking = false;
               
-              // Iniciar timeout de 8 segundos esperando respuesta del usuario
-              if (silenceTimeout) clearTimeout(silenceTimeout);
-              silenceTimeout = setTimeout(() => {
-                console.log('⏰ Usuario no respondió en 8 segundos - enviando prompt de reenganche');
-                if (openAiWs.readyState === 1) {
-                  openAiWs.send(JSON.stringify({
-                    type: 'conversation.item.create',
-                    item: {
-                      type: 'message',
-                      role: 'user',
-                      content: [{ type: 'input_text', text: '...' }]
-                    }
-                  }));
-                  openAiWs.send(JSON.stringify({ type: 'response.create' }));
-                }
-              }, 8000);
+              // NO iniciar timeout si acabamos de detectar que el usuario habló hace poco
+              // Esto evita el error conversation_already_has_active_response
             }
             
             // Manejar cancelación exitosa
@@ -514,6 +502,9 @@ app.ws('/media-stream', (ws, req) => {
               if (r.error?.code === 'response_cancel_not_active') {
                 // Ignorar este error - es normal cuando no hay respuesta activa
                 console.log('⚠️ Intento de cancelar sin respuesta activa (ignorado)');
+              } else if (r.error?.code === 'conversation_already_has_active_response') {
+                // Ignorar este error - ocurre cuando el reenganche se activa mientras hay respuesta
+                console.log('⚠️ Ya hay una respuesta activa (ignorado)');
               } else {
                 console.error('❌ Error de OpenAI:', r.error);
               }
