@@ -246,6 +246,7 @@ app.ws('/media-stream', (ws, req) => {
   let transcript = { client: [], agent: [], captured_data: {}, agent_full_text: '' };
   let sessionInitialized = false;
   let isAgentSpeaking = false;
+  let silenceTimeout = null;
   
   console.log('🔵 Nueva conexión WebSocket');
   
@@ -351,6 +352,12 @@ app.ws('/media-stream', (ws, req) => {
             if (r.type === 'input_audio_buffer.speech_started') {
               console.log('🗣️ Cliente empezó a hablar (VAD detectó voz)');
               
+              // Cancelar timeout de reenganche ya que el usuario respondió
+              if (silenceTimeout) {
+                clearTimeout(silenceTimeout);
+                silenceTimeout = null;
+              }
+              
               if (isAgentSpeaking) {
                 console.log('🛑 Interrumpiendo agente - limpiando buffer de audio');
                 
@@ -386,6 +393,23 @@ app.ws('/media-stream', (ws, req) => {
             if (r.type === 'response.done') {
               console.log('✅ OpenAI terminó de generar respuesta');
               isAgentSpeaking = false;
+              
+              // Iniciar timeout de 8 segundos esperando respuesta del usuario
+              if (silenceTimeout) clearTimeout(silenceTimeout);
+              silenceTimeout = setTimeout(() => {
+                console.log('⏰ Usuario no respondió en 8 segundos - enviando prompt de reenganche');
+                if (openAiWs.readyState === 1) {
+                  openAiWs.send(JSON.stringify({
+                    type: 'conversation.item.create',
+                    item: {
+                      type: 'message',
+                      role: 'user',
+                      content: [{ type: 'input_text', text: '...' }]
+                    }
+                  }));
+                  openAiWs.send(JSON.stringify({ type: 'response.create' }));
+                }
+              }, 8000);
             }
             
             // Manejar cancelación exitosa
