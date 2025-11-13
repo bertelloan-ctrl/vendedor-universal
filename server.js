@@ -245,6 +245,7 @@ app.ws('/media-stream', (ws, req) => {
   let openAiWs, streamSid, callSid;
   let transcript = { client: [], agent: [], captured_data: {}, agent_full_text: '' };
   let sessionInitialized = false;
+  let isAgentSpeaking = false;
   
   console.log('🔵 Nueva conexión WebSocket');
   
@@ -349,21 +350,27 @@ app.ws('/media-stream', (ws, req) => {
             
             // CRÍTICO: Detectar cuando el cliente empieza a hablar para interrumpir al agente
             if (r.type === 'input_audio_buffer.speech_started') {
-              console.log('🛑 Cliente empezó a hablar - interrumpiendo agente');
-              // Cancelar la respuesta actual del agente
-              openAiWs.send(JSON.stringify({
-                type: 'response.cancel'
-              }));
+              console.log('🗣️ Cliente empezó a hablar');
+              // Solo cancelar si hay una respuesta activa del agente
+              if (isAgentSpeaking && openAiWs.readyState === 1) {
+                console.log('🛑 Interrumpiendo agente');
+                openAiWs.send(JSON.stringify({
+                  type: 'response.cancel'
+                }));
+                isAgentSpeaking = false;
+              }
             }
             
             // Log especial para response.created
             if (r.type === 'response.created') {
               console.log('📢 OpenAI empezando a generar respuesta...');
+              isAgentSpeaking = true;
             }
             
             // Log especial para response.done
             if (r.type === 'response.done') {
               console.log('✅ OpenAI terminó de generar respuesta');
+              isAgentSpeaking = false;
             }
             
             // CRÍTICO: Enviar audio a Twilio
