@@ -292,9 +292,9 @@ app.ws('/media-stream', (ws, req) => {
               modalities: ['text', 'audio'],
               turn_detection: { 
                 type: 'server_vad',
-                threshold: 0.5,
-                prefix_padding_ms: 300,
-                silence_duration_ms: 600
+                threshold: 0.3,
+                prefix_padding_ms: 500,
+                silence_duration_ms: 800
               },
               input_audio_format: 'g711_ulaw',
               output_audio_format: 'g711_ulaw',
@@ -349,7 +349,7 @@ app.ws('/media-stream', (ws, req) => {
             
             // Detectar cuando el cliente empieza a hablar para interrumpir
             if (r.type === 'input_audio_buffer.speech_started') {
-              console.log('🗣️ Cliente empezó a hablar');
+              console.log('🗣️ Cliente empezó a hablar (VAD detectó voz)');
               
               if (isAgentSpeaking) {
                 console.log('🛑 Interrumpiendo agente - limpiando buffer de audio');
@@ -369,6 +369,11 @@ app.ws('/media-stream', (ws, req) => {
                 
                 isAgentSpeaking = false;
               }
+            }
+            
+            // Detectar cuando el cliente termina de hablar
+            if (r.type === 'input_audio_buffer.speech_stopped') {
+              console.log('🤐 Cliente dejó de hablar (silencio detectado)');
             }
             
             // Log especial para response.created
