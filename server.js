@@ -347,11 +347,28 @@ app.ws('/media-stream', (ws, req) => {
               console.log(`🔔 OpenAI event: ${r.type}`);
             }
             
-            // Detectar cuando el cliente empieza a hablar (solo para logging)
+            // Detectar cuando el cliente empieza a hablar para interrumpir
             if (r.type === 'input_audio_buffer.speech_started') {
               console.log('🗣️ Cliente empezó a hablar');
-              // DESHABILITADO: La cancelación causa errores de timing
-              // Dejamos que OpenAI maneje las interrupciones naturalmente con VAD
+              
+              if (isAgentSpeaking) {
+                console.log('🛑 Interrumpiendo agente - limpiando buffer de audio');
+                
+                // Limpiar el buffer de audio de Twilio para detener reproducción inmediata
+                ws.send(JSON.stringify({
+                  event: 'clear',
+                  streamSid: streamSid
+                }));
+                
+                // Cancelar la respuesta de OpenAI
+                if (openAiWs.readyState === 1) {
+                  openAiWs.send(JSON.stringify({
+                    type: 'response.cancel'
+                  }));
+                }
+                
+                isAgentSpeaking = false;
+              }
             }
             
             // Log especial para response.created
@@ -363,6 +380,12 @@ app.ws('/media-stream', (ws, req) => {
             // Log especial para response.done
             if (r.type === 'response.done') {
               console.log('✅ OpenAI terminó de generar respuesta');
+              isAgentSpeaking = false;
+            }
+            
+            // Manejar cancelación exitosa
+            if (r.type === 'response.cancelled') {
+              console.log('🚫 Respuesta cancelada exitosamente');
               isAgentSpeaking = false;
             }
             
@@ -457,9 +480,14 @@ app.ws('/media-stream', (ws, req) => {
               });
             }
             
-            // Log de errores
+            // Log de errores (excepto errores de cancelación esperados)
             if (r.type === 'error') {
-              console.error('❌ Error de OpenAI:', r.error);
+              if (r.error?.code === 'response_cancel_not_active') {
+                // Ignorar este error - es normal cuando no hay respuesta activa
+                console.log('⚠️ Intento de cancelar sin respuesta activa (ignorado)');
+              } else {
+                console.error('❌ Error de OpenAI:', r.error);
+              }
             }
             
           } catch (error) {
