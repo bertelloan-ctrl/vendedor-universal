@@ -294,9 +294,9 @@ app.ws('/media-stream', (ws, req) => {
               modalities: ['text', 'audio'],
               turn_detection: { 
                 type: 'server_vad',
-                threshold: 0.15,
-                prefix_padding_ms: 600,
-                silence_duration_ms: 1000
+                threshold: 0.5,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 700
               },
               input_audio_format: 'g711_ulaw',
               output_audio_format: 'g711_ulaw',
