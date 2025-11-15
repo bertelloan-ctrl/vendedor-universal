@@ -300,7 +300,7 @@ app.ws('/media-stream', (ws, req) => {
               },
               input_audio_format: 'g711_ulaw',
               output_audio_format: 'g711_ulaw',
-              voice: 'onyx',
+              voice: 'echo',
               instructions: buildPrompt(config),
               temperature: 1.0,
               max_response_output_tokens: 'inf',
