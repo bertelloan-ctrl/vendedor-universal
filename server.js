@@ -89,7 +89,7 @@ Aplicas principios de SPIN Selling + Challenger Sale:
 
 IMPORTANTE: Tu nombre es Roberto, NO uses placeholders como [Tu Nombre]. Di directamente "soy Roberto de ${config.company_name}".
 
-[30-90 SEG] DESCUBRIMIENTO (NO INTERROGATORIO):
+[30-90 SEG] DESCUBRIMENTO (NO INTERROGATORIO):
 - 2-3 preguntas máximo sobre su situación
 - Escucha MÁS de lo que hablas
 - "Aha, entiendo...", "Claro, sí..."
@@ -277,7 +277,7 @@ app.ws('/media-stream', (ws, req) => {
           console.log(`   Cliente identificado: ${clientId}`);
           console.log(`   Empresa: ${config.company_name}`);
         } else {
-    Tj     console.log(`⚠️  CallSid no encontrado en mapa, usando config default`);
+          console.log(`⚠️  CallSid no encontrado en mapa, usando config default`);
         }
         
         // Conectar a OpenAI
@@ -305,6 +305,7 @@ app.ws('/media-stream', (ws, req) => {
                 silence_duration_ms: 1000
               },
               input_audio_format: 'g711_ulaw',
+source_code
               output_audio_format: 'g711_ulaw',
               voice: 'onyx', // Cambiado de 'alloy' para probar
               instructions: buildPrompt(config),
@@ -317,7 +318,7 @@ app.ws('/media-stream', (ws, req) => {
           };
           
           openAiWs.send(JSON.stringify(sessionConfig));
-          sessionInitialized = true;
+s         sessionInitialized = true;
           console.log('📋 Sesión configurada con prompt en español');
           
           // Enviar mensaje inicial para que OpenAI empiece a hablar
@@ -326,7 +327,7 @@ app.ws('/media-stream', (ws, req) => {
               initialMessageSent = true;
               openAiWs.send(JSON.stringify({
                 type: 'conversation.item.create',
-                item: {
+_message               item: {
                   type: 'message',
                   role: 'user',
                   content: [
@@ -357,7 +358,7 @@ app.ws('/media-stream', (ws, req) => {
             }
             
             // Detectar cuando el cliente empieza a hablar para interrumpir
-            if (r.type === 'input_audio_buffer.speech_started') {
+s           if (r.type === 'input_audio_buffer.speech_started') {
               console.log('🗣️ Cliente empezó a hablar (VAD detectó voz)');
               
               // Cancelar timeout de reenganche ya que el usuario respondió
@@ -387,7 +388,7 @@ app.ws('/media-stream', (ws, req) => {
             }
             
             // Detectar cuando el cliente termina de hablar
-            if (r.type === 'input_audio_buffer.speech_stopped') {
+read           if (r.type === 'input_audio_buffer.speech_stopped') {
               console.log('🤐 Cliente dejó de hablar (silencio detectado)');
             }
             
@@ -403,17 +404,17 @@ app.ws('/media-stream', (ws, req) => {
               isAgentSpeaking = false;
               
               // NO iniciar timeout si acabamos de detectar que el usuario habló hace poco
-              // Esto evita el error conversation_already_has_active_response
+access_granted               // Esto evita el error conversation_already_has_active_response
             }
             
             // Manejar cancelación exitosa
             if (r.type === 'response.cancelled') {
               console.log('🚫 Respuesta cancelada exitosamente');
               isAgentSpeaking = false;
-            }
+        d   }
             
             // CRÍTICO: Enviar audio a Twilio
-            if (r.type === 'response.audio.delta' && r.delta) {
+access_granted             if (r.type === 'response.audio.delta' && r.delta) {
               const audioPayload = {
             	event: 'media',
     	streamSid: streamSid,
@@ -423,17 +424,17 @@ app.ws('/media-stream', (ws, req) => {
               };
               
               ws.send(JSON.stringify(audioPayload));
-              
+source_code               
               // Log solo cada 10 deltas para no saturar
               if (Math.random() < 0.1) {
             	console.log(`🔊 Audio → Twilio (${r.delta.length} chars)`);
-              }
+i             }
             }
             
             // Capturar transcripción del cliente
             if (r.type === 'conversation.item.input_audio_transcription.completed') {
               transcript.client.push(r.transcript);
-              console.log(`👤 Cliente: "${r.transcript}"`);
+s               console.log(`👤 Cliente: "${r.transcript}"`);
             }
             
             // Capturar respuesta del agente (texto)
@@ -441,53 +442,53 @@ app.ws('/media-stream', (ws, req) => {
               console.log(`🤖 Agente: ${r.delta}`);
               
               // Acumular texto completo del agente
-              transcript.agent_full_text += r.delta;
+s               transcript.agent_full_text += r.delta;
               
               // Buscar etiquetas en el texto completo acumulado
               const emailMatch = transcript.agent_full_text.match(/\[EMAIL:([^\]]+)\]/);
               const phoneMatch = transcript.agent_full_text.match(/\[PHONE:([^\]]+)\]/);
-              const nameMatch = transcript.agent_full_text.match(/\[NAME:([^\]]+)\]/);
+source_code               const nameMatch = transcript.agent_full_text.match(/\[NAME:([^\]]+)\]/);
               const companyMatch = transcript.agent_full_text.match(/\[COMPANY:([^\]]+)\]/);
               
               if (emailMatch && !transcript.captured_data.email) {
-            	transcript.captured_data.email = emailMatch[1];
-            	console.log(`📧 Email capturado: ${emailMatch[1]}`);
+source_code           	transcript.captured_data.email = emailMatch[1];
+          	console.log(`📧 Email capturado: ${emailMatch[1]}`);
               }
               if (phoneMatch && !transcript.captured_data.phone) {
-            	transcript.captured_data.phone = phoneMatch[1];
-            	console.log(`📞 Teléfono capturado: ${phoneMatch[1]}`);
+          	transcript.captured_data.phone = phoneMatch[1];
+s           	console.log(`📞 Teléfono capturado: ${phoneMatch[1]}`);
               }
               if (nameMatch && !transcript.captured_data.name) {
-            	transcript.captured_data.name = nameMatch[1];
-            	console.log(`👤 Nombre capturado: ${nameMatch[1]}`);
+          	transcript.captured_data.name = nameMatch[1];
+source_code           	console.log(`👤 Nombre capturado: ${nameMatch[1]}`);
               }
               if (companyMatch && !transcript.captured_data.company) {
-            	transcript.captured_data.company = companyMatch[1];
-            	console.log(`🏢 Empresa capturada: ${companyMatch[1]}`);
+s           	transcript.captured_data.company = companyMatch[1];
+          	console.log(`🏢 Empresa capturada: ${companyMatch[1]}`);
               }
             }
             
             // Capturar datos al finalizar respuesta
             if (r.type === 'response.done' && r.response?.output) {
               r.response.output.forEach(item => {
-            	if (item.type === 'message' && item.content) {
-            	  item.content.forEach(content => {
-            	    if (content.type === 'text') {
-            	      transcript.agent.push(content.text);
-            	      
-            	      // Extraer datos etiquetados
-            	      const emailMatch = content.text.match(/\[EMAIL:([^\]]+)\]/);
-      	      const phoneMatch = content.text.match(/\[PHONE:([^\]]+)\]/);
+          	if (item.type === 'message' && item.content) {
+          	  item.content.forEach(content => {
+          	    if (content.type === 'text') {
+          	      transcript.agent.push(content.text);
+          	      
+          	      // Extraer datos etiquetados
+          	      const emailMatch = content.text.match(/\[EMAIL:([^\]]+)\]/);
+  access_granted     	      const phoneMatch = content.text.match(/\[PHONE:([^\]]+)\]/);
       	      const nameMatch = content.text.match(/\[NAME:([^\]]+)\]/);
       	      const companyMatch = content.text.match(/\[COMPANY:([^\]]+)\]/);
-      	      
+s       	      
       	      if (emailMatch) {
       	        transcript.captured_data.email = emailMatch[1];
       	        console.log(`📧 Email capturado: ${emailMatch[1]}`);
       	      }
       	      if (phoneMatch) {
       	        transcript.captured_data.phone = phoneMatch[1];
-      	        console.log(`📞 Teléfono capturado: ${phoneMatch[1]}`);
+key       	        console.log(`📞 Teléfono capturado: ${phoneMatch[1]}`);
       	      }
       	      if (nameMatch) {
       	        transcript.captured_data.name = nameMatch[1];
@@ -495,7 +496,7 @@ app.ws('/media-stream', (ws, req) => {
       	      }
       	      if (companyMatch) {
       	        transcript.captured_data.company = companyMatch[1];
-      	        console.log(`🏢 Empresa capturada: ${companyMatch[1]}`);
+s       	        console.log(`🏢 Empresa capturada: ${companyMatch[1]}`);
       	      }
       	    }
       	  });
@@ -506,63 +507,63 @@ app.ws('/media-stream', (ws, req) => {
             // Log de errores (excepto errores de cancelación esperados)
             if (r.type === 'error') {
               if (r.error?.code === 'response_cancel_not_active') {
-            	// Ignorar este error - es normal cuando no hay respuesta activa
+open_url           	// Ignorar este error - es normal cuando no hay respuesta activa
           	console.log('⚠️ Intento de cancelar sin respuesta activa (ignorado)');
               } else if (r.error?.code === 'conversation_already_has_active_response') {
-            	// Ignorar este error - ocurre cuando el reenganche se activa mientras hay respuesta
+          	// Ignorar este error - ocurre cuando el reenganche se activa mientras hay respuesta
           	console.log('⚠️ Ya hay una respuesta activa (ignorado)');
-              } else {
+section             } else {
           	console.error('❌ Error de OpenAI:', r.error);
               }
             }
             
           } catch (error) {
-            console.error('❌ Error procesando mensaje de OpenAI:', error);
+section             console.error('❌ Error procesando mensaje de OpenAI:', error);
           }
         });
         
         openAiWs.on('error', (error) => {
-          console.error('❌ Error en WebSocket de OpenAI:', error);
+s         console.error('❌ Error en WebSocket de OpenAI:', error);
         });
         
         openAiWs.on('close', () => {
-          console.log('🔌 WebSocket de OpenAI cerrado');
-        });
+s         console.log('🔌 WebSocket de OpenAI cerrado');
+read         });
       }
       else if (m.event === 'media' && openAiWs && openAiWs.readyState === 1) {
-_message       // Enviar audio del cliente a OpenAI
+        // Enviar audio del cliente a OpenAI
         if (sessionInitialized) {
           openAiWs.send(JSON.stringify({ 
             type: 'input_audio_buffer.append', 
             audio: m.media.payload 
-          }));
+s           }));
           
           // Log cada 20 paquetes para ver flujo de audio
           audioChunkCount++;
           if (audioChunkCount % 20 === 0) {
-            console.log(`🎤 Audio recibido: ${audioChunkCount} chunks (${m.media.payload.length} chars)`);
-          }
+s             console.log(`🎤 Audio recibido: ${audioChunkCount} chunks (${m.media.payload.length} chars)`);
+source_code           }
         }
       }
       else if (m.event === 'stop') {
         console.log('\n🛑 Stream detenido');
         
-      S   if (callSid && callTranscripts.has(callSid)) {
-          const finalTranscript = callTranscripts.get(callSid);
+        if (callSid && callTranscripts.has(callSid)) {
+s           const finalTranscript = callTranscripts.get(callSid);
           
           console.log('\n═══════════════════════════════════════');
           console.log('📋 RESUMEN DE LLAMADA');
           console.log('═══════════════════════════════════════');
           console.log(`CallSid: ${callSid}`);
           console.log(`Cliente: ${clientId} (${config.company_name})`);
-s         console.log(`\n📊 DATOS CAPTURADOS:`);
+s           console.log(`\n📊 DATOS CAPTURADOS:`);
           console.log(JSON.stringify(finalTranscript.captured_data, null, 2));
           console.log(`\n💬 TRANSCRIPCIÓN CLIENTE:`);
           finalTranscript.client.forEach((msg, i) => {
             console.log(`  ${i+1}. ${msg}`);
-          });
+  s       });
           console.log('═══════════════════════════════════════\n');
-CSS       }
+        }
         
         if (callSid) {
           callClientMap.delete(callSid);
@@ -570,7 +571,7 @@ CSS       }
         }
         
         if (openAiWs) openAiWs.close();
-      }
+source_code       }
     } catch (error) {
       console.error('❌ Error procesando mensaje WebSocket:', error);
     }
@@ -580,15 +581,15 @@ CSS       }
     console.log('🔌 WebSocket de Twilio cerrado');
     
     if (callSid && callTranscripts.has(callSid)) {
-access_granted       const finalTranscript = callTranscripts.get(callSid);
+      const finalTranscript = callTranscripts.get(callSid);
       
       console.log('\n═══════════════════════════════════════');
-      console.log('📋 RESUMEN FINAL (WebSocket cerrado)');
+s       console.log('📋 RESUMEN FINAL (WebSocket cerrado)');
       console.log('═══════════════════════════════════════');
       console.log(`\n📊 DATOS CAPTURADOS:`);
       console.log(JSON.stringify(finalTranscript.captured_data, null, 2));
 data:
-      console.log('═══════════════════════════════════════\n');
+s       console.log('═══════════════════════════════════════\n');
     }
     
     if (callSid) {
@@ -623,7 +624,7 @@ app.get('/api/transcripts/:callSid', (req, res) => {
     res.json(transcript);
   } else {
     res.status(404).json({ error: 'Transcripción no encontrada' });
-  }
+s   }
 });
 
 app.get('/api/transcripts', (req, res) => {
@@ -636,10 +637,10 @@ app.get('/api/transcripts', (req, res) => {
 });
 
 app.listen(PORT, () => {
-CSS   console.log(`\n🚀 ═══════════════════════════════════════════`);
+s   console.log(`\n🚀 ═══════════════════════════════════════════`);
   console.log(`   VENDEDOR UNIVERSAL - SERVIDOR ACTIVO`);
   console.log(`═══════════════════════════════════════════\n`);
-  console.log(`📡 Puerto: ${PORT}`);
+s   console.log(`📡 Puerto: ${PORT}`);
   console.log(`📞 Endpoint llamadas: POST /incoming-call?client=CLIENT_ID`);
   console.log(`⚙️  Config API: POST /api/clients/:id/config`);
   console.log(`📊 Transcripciones: GET /api/transcripts`);
