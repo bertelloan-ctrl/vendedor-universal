@@ -20,6 +20,119 @@ const VAD_THRESHOLD = 0.6; // Umbral más alto para evitar activación con ruido
 const VAD_PREFIX_PADDING = 500; // Más tiempo antes de considerar que es habla
 const VAD_SILENCE_DURATION = 1000; // Más tiempo de silencio antes de considerar que terminó de hablar
 
+// Función para convertir números a palabras (de dos en dos)
+function phoneNumberToWords(phone) {
+  // Remover caracteres no numéricos
+  const digits = phone.replace(/\D/g, '');
+
+  if (digits.length !== 10) {
+    // Si no son 10 dígitos, devolver dígito por dígito
+    return digits.split('').map(d => numberToWord(d)).join('-');
+  }
+
+  // Agrupar de dos en dos: 55-12-34-56-78
+  const pairs = [];
+  for (let i = 0; i < digits.length; i += 2) {
+    const pair = digits.substr(i, 2);
+    pairs.push(pairToWords(pair));
+  }
+
+  return pairs.join(', ');
+}
+
+function pairToWords(pair) {
+  const num = parseInt(pair);
+
+  const tens = ['', '', 'veinte', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
+  const teens = ['diez', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve'];
+  const ones = ['', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve'];
+
+  if (num === 0) return 'cero cero';
+  if (num < 10) return 'cero ' + ones[num];
+  if (num >= 10 && num < 20) return teens[num - 10];
+
+  const ten = Math.floor(num / 10);
+  const one = num % 10;
+
+  if (one === 0) return tens[ten];
+  if (num >= 20 && num < 30) return 'veinti' + ones[one];
+
+  return tens[ten] + ' y ' + ones[one];
+}
+
+function numberToWord(digit) {
+  const words = ['cero', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve'];
+  return words[parseInt(digit)] || digit;
+}
+
+// Detectar patrones de IVR/conmutador
+function detectIVRPattern(text) {
+  // Normalizar texto
+  const normalized = text.toLowerCase()
+    .replace(/á/g, 'a').replace(/é/g, 'e').replace(/í/g, 'i')
+    .replace(/ó/g, 'o').replace(/ú/g, 'u').replace(/ñ/g, 'n');
+
+  // Patrones comunes de IVR en español
+  const patterns = [
+    // "Para X marque/presione/oprima N"
+    { regex: /para\s+(\w+)\s+(?:marque|presione|oprima|digite)\s+(?:el\s+)?(\d)/gi, type: 'menu' },
+    // "Marque/Presione N para X"
+    { regex: /(?:marque|presione|oprima|digite)\s+(?:el\s+)?(\d)\s+para\s+(\w+)/gi, type: 'menu' },
+    // "Si desea X marque N"
+    { regex: /si\s+desea\s+(\w+)\s+(?:marque|presione|oprima)\s+(\d)/gi, type: 'menu' },
+    // Detectar palabras clave de departamentos
+    { regex: /ventas|compras|facturacion|cobranza|atencion|servicio|soporte/gi, type: 'department' }
+  ];
+
+  for (const pattern of patterns) {
+    const matches = [...normalized.matchAll(pattern.regex)];
+    if (matches.length > 0) {
+      return { detected: true, matches, pattern: pattern.type, text: normalized };
+    }
+  }
+
+  return { detected: false };
+}
+
+// Extraer número a marcar del texto del IVR
+function extractDTMFFromIVR(text) {
+  const normalized = text.toLowerCase();
+
+  // Buscar palabras clave de departamentos que nos interesan
+  const targetDepartments = [
+    { keywords: ['ventas', 'venta', 'comercial'], digit: null },
+    { keywords: ['compras', 'compra', 'adquisiciones'], digit: null },
+    { keywords: ['administracion', 'administrador', 'gerencia'], digit: null }
+  ];
+
+  // Patrones para extraer el número asociado
+  const patterns = [
+    /para\s+(?:el\s+area\s+de\s+)?(\w+)\s+(?:marque|presione|oprima|digite)\s+(?:el\s+)?(\d)/gi,
+    /(?:marque|presione|oprima|digite)\s+(?:el\s+)?(\d)\s+para\s+(?:el\s+area\s+de\s+)?(\w+)/gi,
+    /si\s+desea\s+(?:hablar\s+con\s+)?(\w+)\s+(?:marque|presione|oprima)\s+(?:el\s+)?(\d)/gi
+  ];
+
+  for (const pattern of patterns) {
+    const matches = [...normalized.matchAll(pattern)];
+
+    for (const match of matches) {
+      const dept = match[1];
+      const digit = match[2] || match[1]; // Depende del orden en el patrón
+
+      // Verificar si el departamento coincide con nuestros targets
+      for (const target of targetDepartments) {
+        for (const keyword of target.keywords) {
+          if (dept.includes(keyword) || keyword.includes(dept)) {
+            return { digit: digit.match(/\d/) ? digit.match(/\d/)[0] : null, department: dept };
+          }
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 function getClientConfig(clientId) {
   if (!clientConfigs.has(clientId)) {
     clientConfigs.set(clientId, {
@@ -174,10 +287,26 @@ EMAIL:
 - NO asumas prefijos como "al" o "el"
 - Repite EXACTAMENTE lo que el cliente dijo
 
-TELÉFONO:
-"¿Y tu teléfono?" [PAUSA - ESCUCHA] "Okay, anoto: cinco-cinco-uno-dos-tres-cuatro-cinco-seis-siete-ocho, ¿está bien?" [PAUSA - CONFIRMA]
-- Repite número por número
-- Confirma SIEMPRE
+TELÉFONO (CRÍTICO - REPETIR DE DOS EN DOS):
+"¿Y tu teléfono?" [PAUSA - ESCUCHA]
+
+Cuando te den un teléfono de 10 dígitos, AGRÚPALOS DE DOS EN DOS:
+
+Ejemplo 1: Si dicen "5512345678"
+✓ CORRECTO: "Okay, anoto: cincuenta y cinco, doce, treinta y cuatro, cincuenta y seis, setenta y ocho. ¿Está bien?"
+✗ INCORRECTO: "cinco-cinco-uno-dos-tres-cuatro..." (NO hagas esto)
+
+Ejemplo 2: Si dicen "5545678901"
+✓ CORRECTO: "Perfecto, entonces es: cincuenta y cinco, cuarenta y cinco, sesenta y siete, ochenta y nueve, cero uno. ¿Correcto?"
+
+Ejemplo 3: Si dicen "8112349876"
+✓ CORRECTO: "Anoto: ochenta y uno, doce, treinta y cuatro, noventa y ocho, setenta y seis. ¿Así está?"
+
+REGLAS:
+- SIEMPRE agrupa de dos en dos (más natural en español mexicano)
+- Si dicen "cero", repite "cero" (ej: "cero tres" para 03)
+- Confirma SIEMPRE después de repetir
+- Usa etiqueta [PHONE:5512345678] con los 10 dígitos sin espacios
 
 MARCA CON ETIQUETAS:
 Cuando captures datos, usa estas etiquetas en tu respuesta:
@@ -223,6 +352,42 @@ Ejemplo: "Perfecto Roberto [NAME:Roberto García], te mando la info a roberto@co
 ✓ SIEMPRE haz pausas para respirar naturalmente
 ✓ SIEMPRE haz preguntas cortas para mantener al cliente participando
 ✓ SI el cliente te interrumpe, PARA inmediatamente y escucha
+
+═══ DETECCIÓN DE CONMUTADOR/IVR ═══
+
+IMPORTANTE: Si al contestar escuchas un MENÚ AUTOMATIZADO (conmutador/IVR):
+
+INDICADORES DE IVR:
+- Voz robótica o automatizada
+- Frases como: "Para X marque N", "Presione N para Y", "Si desea hablar con..."
+- Música de espera o tonos
+- Mensaje grabado con opciones
+
+ACCIÓN INMEDIATA:
+1. ESPERA en silencio 2-3 segundos (deja que termine el mensaje)
+2. IDENTIFICA qué número marcar:
+   - Para COMPRAS → Usa ese número
+   - Para VENTAS → Usa ese número
+   - Para ADMINISTRACIÓN → Usa ese número
+   - Si no mencionan ninguno de estos, espera a que conteste operadora
+
+3. Cuando identifiques el departamento correcto, di en voz ALTA y CLARA:
+   "[DTMF:N]" donde N es el número a marcar
+
+   Ejemplos:
+   - Si escuchas "Para compras marque 2" → di "[DTMF:2]"
+   - Si escuchas "Presione 3 para ventas" → di "[DTMF:3]"
+   - Si escuchas "Para administración marque 4" → di "[DTMF:4]"
+
+4. Después de marcar, ESPERA 3-5 segundos en silencio (está conectando)
+5. Cuando conteste una persona real, INICIA tu presentación normal
+
+IMPORTANTE:
+- NO hables mientras suena el IVR (solo escucha)
+- SOLO di la etiqueta [DTMF:N] cuando identifiques el departamento
+- NO expliques al cliente que estás marcando (el cliente no escucha el IVR)
+- Después de marcar, ESPERA que conteste una persona
+- Si después de 10 segundos no contesta nadie, di: "Parece que no hay nadie disponible, ¿tienes un contacto directo?"
 
 ═══ TONO Y ENERGÍA ═══
 - Amigable pero no falso (genuino)
@@ -511,6 +676,25 @@ app.ws('/media-stream', (ws, req) => {
             if (r.type === 'conversation.item.input_audio_transcription.completed') {
               transcript.client.push(r.transcript);
               console.log(`👤 Cliente: "${r.transcript}"`);
+
+              // Detectar IVR/Conmutador automáticamente
+              const ivrDetection = detectIVRPattern(r.transcript);
+              if (ivrDetection.detected) {
+                console.log(`🤖 IVR/Conmutador detectado en respuesta del cliente`);
+                console.log(`   Texto: "${r.transcript}"`);
+
+                // Intentar extraer el número DTMF a marcar
+                const dtmfInfo = extractDTMFFromIVR(r.transcript);
+                if (dtmfInfo && dtmfInfo.digit) {
+                  console.log(`📳 Auto-detectado: Departamento "${dtmfInfo.department}" → marcar ${dtmfInfo.digit}`);
+                  console.log(`   Instruyendo al agente a marcar [DTMF:${dtmfInfo.digit}]`);
+
+                  // Enviar instrucción al agente para que marque (opcional - el agente debería detectarlo solo)
+                  // Por ahora solo logueamos, el agente debería responder con [DTMF:N]
+                } else {
+                  console.log(`   ⚠️ IVR detectado pero no se encontró departamento objetivo (compras/ventas/admin)`);
+                }
+              }
             }
 
             // Capturar respuesta del agente (texto)
@@ -531,8 +715,11 @@ app.ws('/media-stream', (ws, req) => {
                 console.log(`📧 Email capturado: ${emailMatch[1]}`);
               }
               if (phoneMatch && !transcript.captured_data.phone) {
-                transcript.captured_data.phone = phoneMatch[1];
-                console.log(`📞 Teléfono capturado: ${phoneMatch[1]}`);
+                const phoneNumber = phoneMatch[1];
+                transcript.captured_data.phone = phoneNumber;
+                const phoneInWords = phoneNumberToWords(phoneNumber);
+                console.log(`📞 Teléfono capturado: ${phoneNumber}`);
+                console.log(`   En palabras (2 en 2): ${phoneInWords}`);
               }
               if (nameMatch && !transcript.captured_data.name) {
                 transcript.captured_data.name = nameMatch[1];
@@ -541,6 +728,25 @@ app.ws('/media-stream', (ws, req) => {
               if (companyMatch && !transcript.captured_data.company) {
                 transcript.captured_data.company = companyMatch[1];
                 console.log(`🏢 Empresa capturada: ${companyMatch[1]}`);
+              }
+
+              // Detectar etiquetas DTMF para conmutador/IVR
+              const dtmfMatch = r.delta.match(/\[DTMF:(\d)\]/);
+              if (dtmfMatch) {
+                const digit = dtmfMatch[1];
+                console.log(`📳 DTMF detectado: ${digit} - Enviando tono...`);
+
+                // Enviar tono DTMF a través de Twilio
+                if (ws.readyState === WebSocket.OPEN && streamSid) {
+                  ws.send(JSON.stringify({
+                    event: 'dtmf',
+                    streamSid: streamSid,
+                    dtmf: {
+                      digit: digit
+                    }
+                  }));
+                  console.log(`✅ Tono DTMF ${digit} enviado a Twilio`);
+                }
               }
             }
 
@@ -728,7 +934,7 @@ app.get('/api/transcripts', (req, res) => {
 app.listen(PORT, () => {
   console.log(`\n🚀 ═══════════════════════════════════════════`);
   console.log(`   VENDEDOR UNIVERSAL - SERVIDOR ACTIVO`);
-  console.log(`   Versión: Humanizado + Anti-Interrupciones Mejorado`);
+  console.log(`   Versión: Humanizado + IVR + Teléfonos Mejorado`);
   console.log(`═══════════════════════════════════════════\n`);
   console.log(`📡 Puerto: ${PORT}`);
   console.log(`📞 Endpoint llamadas: POST /incoming-call?client=CLIENT_ID`);
@@ -740,6 +946,11 @@ app.listen(PORT, () => {
   console.log(`   - Prefix padding: ${VAD_PREFIX_PADDING}ms (más tiempo para confirmar voz)`);
   console.log(`   - Silence duration: ${VAD_SILENCE_DURATION}ms (más tiempo antes de fin de turno)`);
   console.log(`   - Delay interrupción: ${INTERRUPT_DELAY_MS}ms (filtrar ruido/eco)`);
+  console.log(`\n📳 Funcionalidades Nuevas:`);
+  console.log(`   ✅ Detección automática de IVR/Conmutador`);
+  console.log(`   ✅ Marcado DTMF automático (extensiones 0-9)`);
+  console.log(`   ✅ Reconocimiento de departamentos: ventas, compras, administración`);
+  console.log(`   ✅ Captura de teléfonos con repetición de 2 en 2 (ej: "cincuenta y cinco, doce...")`);
   console.log(`\n📦 Clientes precargados: ${clientConfigs.size}`);
   console.log(`   - allopack_001: ${allopackConfig.company_name}`);
   console.log(`\n✅ Listo para recibir llamadas\n`);
