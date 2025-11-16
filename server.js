@@ -233,11 +233,8 @@ app.post('/incoming-call', (req, res) => {
   
   const twiml = new VoiceResponse();
   const connect = twiml.connect();
-  
-  // CRÍTICO: Habilitar barge-in para interrupciones
   connect.stream({
-    url: `wss://${req.headers.host}/media-stream`,
-    track: 'both_tracks' // Escuchar ambos lados
+    url: `wss://${req.headers.host}/media-stream`
   });
   
   res.type('text/xml').send(twiml.toString());
