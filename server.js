@@ -69,6 +69,24 @@ CARACTERÍSTICAS DE VOZ REAL:
 
 NUNCA hables más de 10 segundos sin parar
 
+═══ DETECCIÓN DE IVR (CONTESTADORAS AUTOMÁTICAS) ═══
+
+Si escuchas un menú automatizado tipo:
+"Presione 1 para ventas, 2 para compras, 3 para soporte"
+
+IMPORTANTE:
+1. Identifica que es un IVR (menú automatizado)
+2. Encuentra la opción de COMPRAS o VENTAS
+3. Responde con: [DTMF:número]
+
+Ejemplos:
+- "Presione 2 para compras" → Di: "[DTMF:2] Voy a marcar opción 2"
+- "Opción 3 es ventas" → Di: "[DTMF:3] Marco opción 3"
+- "Para área de compras marque 5" → Di: "[DTMF:5] Opción 5"
+
+Si NO es IVR (persona real):
+- Saluda normalmente
+
 ═══ FLUJO: MICRO-FRASES ═══
 
 CRÍTICO: Habla en MICRO-BURSTS de 3-5 PALABRAS MÁXIMO
@@ -450,6 +468,7 @@ app.ws('/media-stream', (ws, req) => {
               const phoneMatch = transcript.agent_full_text.match(/\[PHONE:([^\]]+)\]/);
               const nameMatch = transcript.agent_full_text.match(/\[NAME:([^\]]+)\]/);
               const companyMatch = transcript.agent_full_text.match(/\[COMPANY:([^\]]+)\]/);
+              const dtmfMatch = transcript.agent_full_text.match(/\[DTMF:(\d)\]/);
               
               if (emailMatch && !transcript.captured_data.email) {
                 transcript.captured_data.email = emailMatch[1];
@@ -466,6 +485,19 @@ app.ws('/media-stream', (ws, req) => {
               if (companyMatch && !transcript.captured_data.company) {
                 transcript.captured_data.company = companyMatch[1];
                 console.log(`🏢 Empresa capturada: ${companyMatch[1]}`);
+              }
+              if (dtmfMatch) {
+                const digit = dtmfMatch[1];
+                console.log(`🔢 IVR detectado - Enviando DTMF: ${digit}`);
+                
+                // Enviar DTMF a Twilio
+                ws.send(JSON.stringify({
+                  event: 'dtmf',
+                  streamSid: streamSid,
+                  dtmf: {
+                    digit: digit
+                  }
+                }));
               }
             }
             
