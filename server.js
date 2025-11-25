@@ -16,9 +16,9 @@ const callTranscripts = new Map();
 
 // Constantes para manejo de interrupciones mejorado
 const INTERRUPT_DELAY_MS = 250; // Esperar 250ms antes de interrumpir para filtrar ruido
-const VAD_THRESHOLD = 0.6; // Umbral más alto para evitar activación con ruido de fondo
-const VAD_PREFIX_PADDING = 500; // Más tiempo antes de considerar que es habla
-const VAD_SILENCE_DURATION = 1000; // Más tiempo de silencio antes de considerar que terminó de hablar
+const VAD_THRESHOLD = 0.5; // Bajado de 0.6 - balance para detectar voz normal sin activarse con ruido
+const VAD_PREFIX_PADDING = 300; // Reducido de 500ms - responder más rápido a voz real
+const VAD_SILENCE_DURATION = 800; // Reducido de 1000ms - detectar fin de habla sin cortar demasiado rápido
 
 // Función para convertir números a palabras (de dos en dos)
 function phoneNumberToWords(phone) {
